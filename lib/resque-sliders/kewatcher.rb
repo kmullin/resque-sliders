@@ -1,7 +1,8 @@
 #!/usr/bin/env ruby
 
-require 'timeout'
 require 'resque'
+require 'timeout'
+require 'fileutils'
 
 module ResqueSliders
   class KEWatcher
@@ -10,6 +11,12 @@ module ResqueSliders
 
     def initialize(options={})
       @verbosity = (options[:verbosity] || 0).to_i
+      @rakefile = File.expand_path(options[:rakefile]) rescue nil
+      @rakefile = File.exists?(@rakefile) ? @rakefile : nil if @rakefile
+      @pidfile = File.expand_path(options[:pidfile]) rescue nil
+      @pidfile = @pidfile =~ /\.pid/ ? @pidfile : @pidfile + '.pid' if @pidfile
+      save_pid!
+
       @max_children = (options[:max_children] || 5).to_i
       @hostname = `hostname -s`.chomp.downcase
       @pids = Hash.new # init pids array to track running children
@@ -18,11 +25,8 @@ module ResqueSliders
       @need_queues = Array.new # keep track of pids that are needed
       @dead_queues = Array.new # keep track of pids that are dead
 
-      # Clean this up
-      @rakefile = options[:rakefile]
       rails_env = ENV['RAILS_ENV'] || 'development'
       resque_config = options[:config] || 'localhost'
-      # so we can use our own config file
       case resque_config
       when Hash
         Resque.redis = resque_config[rails_env]
@@ -34,7 +38,7 @@ module ResqueSliders
     def run!(interval=0.1)
       # run it
       interval = Float(interval)
-      $0 = "#{self.class.name}: Starting"
+      $0 = "KEWatcher: Starting"
       startup
 
       count = 0
@@ -52,7 +56,7 @@ module ResqueSliders
 
           while @pids.keys.length < @max_children && (@need_queues.length > 0 || @dead_queues.length > 0)
             queue = @dead_queues.shift || @need_queues.shift
-            @pids.store(fork { exec("QUEUE='#{queue}' rake #{'if' + @rakefile if @rakefile} resque:work") }, queue)
+            @pids.store(fork { exec("QUEUE='#{queue}' rake #{'-f ' + @rakefile if @rakefile} resque:work") }, queue)
             procline @pids.keys.join(', ')
           end
         end
@@ -106,7 +110,7 @@ module ResqueSliders
     end
 
     def procline(string)
-      $0 = "#{self.class.name} (#{@pids.keys.length}): #{string}"
+      $0 = "KEWatcher (#{@pids.keys.length}): #{string}"
       log! $0
     end
 
@@ -180,6 +184,7 @@ module ResqueSliders
       @shutdown = true
       kill_children
       unregister_self
+      remove_pidfile!
     end
 
     def shutdown?
@@ -253,6 +258,32 @@ module ResqueSliders
 
     def log!(message)
       log message if verbosity > 1
+    end
+
+    def save_pid!
+      if @pidfile
+        begin
+          log "Saving pid to => #{@pidfile}"
+          File.open(@pidfile, 'w') { |f| f.write(Process.pid) }
+        rescue Errno::EACCES => e
+          puts "Cannot write pidfile => #{e}"
+          exit 1
+        rescue Errno::ENOENT => e
+          dir = File.dirname(@pidfile)
+          begin
+            log! "#{dir} doesnt exist; Creating it..."
+            FileUtils.mkdir_p(dir)
+          rescue Errno::EACCES => e
+            puts "Cannot create directory => #{e}"
+            exit 1
+          end
+          save_pid! rescue nil
+        end
+      end
+    end
+
+    def remove_pidfile!
+      File.exists?(@pidfile) && File.delete(@pidfile) if @pidfile
     end
 
   end

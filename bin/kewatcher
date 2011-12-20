@@ -26,6 +26,10 @@ OptionParser.new do |opt|
     options[:rakefile] = rakefile
   end
 
+  opt.on("-p", "--pidfile PIDFILE", "PID File location") do |pidfile|
+    options[:pidfile] = pidfile
+  end
+
   opt.on("-v", "--verbose", "Verbosity") do
     options[:verbosity] += 1
   end
