@@ -2,33 +2,33 @@
 
 require 'timeout'
 require 'resque'
-require 'yaml'
 
 module ResqueSliders
   class KEWatcher
 
-    attr_accessor  :verbose
-    attr_accessor  :very_verbose
+    attr_accessor :verbosity
 
-    def initialize(children=5)
-      @max_children = children.to_i # better be integer
+    def initialize(options={})
+      @verbosity = (options[:verbosity] || 0).to_i
+      @max_children = (options[:max_children] || 5).to_i
       @hostname = `hostname -s`.chomp.downcase
       @pids = Hash.new # init pids array to track running children
-      @resque_key = "plugins:resque-sliders:#{@hostname}"
-      @sliders_hosts_key = "plugins:resque-sliders:hosts"
+      @resque_key = "plugins:resque-sliders:#{@hostname}" # Resque also as resque namespace we use
+      @sliders_hosts_key = "plugins:resque-sliders:hosts" # name of config Hash for running daemons
       @need_queues = Array.new # keep track of pids that are needed
       @dead_queues = Array.new # keep track of pids that are dead
 
-      init_resque!
-    end
-
-    def init_resque!
       # Clean this up
-      @rakefile = ENV['RAKEFILE'].nil? ? File.expand_path(File.dirname(__FILE__) + '/test/Rakefile') : ENV['RAKEFILE']
-      resque_config = YAML.load_file(File.expand_path(File.dirname(__FILE__) + '/config/resque.yml'))
+      @rakefile = options[:rakefile]
       rails_env = ENV['RAILS_ENV'] || 'development'
-      Resque.redis = resque_config[rails_env] # so we can use our own config file
-      #@queues = Hash[Resque.queues.map { |x| [x.to_sym, ENV[x.upcase]] }] # to give ENV variables for how many of each to start
+      resque_config = options[:config] || 'localhost'
+      # so we can use our own config file
+      case resque_config
+      when Hash
+        Resque.redis = resque_config[rails_env]
+      when String
+        Resque.redis = resque_config
+      end
     end
 
     def run!(interval=0.1)
@@ -52,7 +52,7 @@ module ResqueSliders
 
           while @pids.keys.length < @max_children && (@need_queues.length > 0 || @dead_queues.length > 0)
             queue = @dead_queues.shift || @need_queues.shift
-            @pids.store(fork { exec("QUEUE='#{queue}' rake -f #{@rakefile} resque:work") }, queue)
+            @pids.store(fork { exec("QUEUE='#{queue}' rake #{'if' + @rakefile if @rakefile} resque:work") }, queue)
             procline @pids.keys.join(', ')
           end
         end
@@ -73,6 +73,41 @@ module ResqueSliders
           end
         end
       end
+    end
+
+    def startup
+      enable_gc_optimizations
+      register_signal_handlers
+      register_self
+      $stdout.sync = true
+    end
+
+    def enable_gc_optimizations
+      if GC.respond_to?(:copy_on_write_friendly=)
+        GC.copy_on_write_friendly = true
+      end
+    end
+
+    def register_signal_handlers
+      trap('TERM') { shutdown! }
+      trap('INT') { shutdown! }
+
+      begin
+        trap('QUIT') { shutdown! }
+        trap('HUP') { signal_hup }
+        trap('USR1') { signal_usr1 }
+        trap('USR2') { signal_usr2 }
+        trap('CONT') { signal_cont }
+      rescue ArgumentError
+        warn "Signals QUIT, USR1, USR2, and/or CONT not supported."
+      end
+
+      log! "Registered signals"
+    end
+
+    def procline(string)
+      $0 = "#{self.class.name} (#{@pids.keys.length}): #{string}"
+      log! $0
     end
 
     def queue_diff!
@@ -126,41 +161,6 @@ module ResqueSliders
       [to_start, to_kill] # return whats left
     end
 
-    def register_signal_handlers
-      trap('TERM') { shutdown! }
-      trap('INT') { shutdown! }
-
-      begin
-        trap('QUIT') { shutdown }
-        trap('HUP') { signal_hup }
-        trap('USR1') { signal_usr1 }
-        trap('USR2') { signal_usr2 }
-        trap('CONT') { signal_cont }
-      rescue ArgumentError
-        warn "Signals QUIT, USR1, USR2, and/or CONT not supported."
-      end
-
-      log! "Registered signals"
-    end
-
-    def procline(string)
-      $0 = "#{self.class.name} (#{@pids.keys.length}): #{string}"
-      log! $0
-    end
-
-    def startup
-      enable_gc_optimizations
-      register_signal_handlers
-      register_self
-      $stdout.sync = true
-    end
-
-    def enable_gc_optimizations
-      if GC.respond_to?(:copy_on_write_friendly=)
-        GC.copy_on_write_friendly = true
-      end
-    end
-
     def remove!(pid)
       # removes pid completely, ignores its queues
       kill_child pid
@@ -175,13 +175,9 @@ module ResqueSliders
       procline @pids.keys.join(', ')
     end
 
-    def shutdown
+    def shutdown!
       log "Exiting..."
       @shutdown = true
-    end
-
-    def shutdown!
-      shutdown
       kill_children
       unregister_self
     end
@@ -218,7 +214,7 @@ module ResqueSliders
 
     def kill_child(pid)
       begin
-        Process.kill("TERM", pid) # try graceful shutdown
+        Process.kill("QUIT", pid) # try graceful shutdown
         log! "Child #{pid} killed. (#{@pids.keys.length-1})"
       rescue Object => e # dunno what this does but it works; dont know exception
         log! "Child #{pid} already dead, sad day. (#{@pids.keys.length-1})"
@@ -247,16 +243,16 @@ module ResqueSliders
     end
 
     def log(message)
-      if verbose
-        puts "*** #{message}"
-      elsif very_verbose
+      if verbosity == 1
+        puts "* #{message}"
+      elsif verbosity > 1
         time = Time.now.strftime('%H:%M:%S %Y-%m-%d')
-        puts "** [#{time}] #$$: #{message}"
+        puts "*** [#{time}] #$$: #{message}"
       end
     end
 
     def log!(message)
-      log message if very_verbose
+      log message if verbosity > 1
     end
 
   end

@@ -2,6 +2,8 @@
 
 $LOAD_PATH.unshift File.expand_path(File.dirname(__FILE__) + '/../lib')
 
+require 'rubygems'
+require 'yaml'
 require 'optparse'
 require 'resque-sliders/kewatcher'
 
@@ -11,20 +13,24 @@ options = {
 }
 
 OptionParser.new do |opt|
-  opt.banner = "Usage: kewatcher [options]"
+  opt.banner = "Usage: #{$0} [options]"
 
   opt.separator ""
   opt.separator "Options:"
 
-  opt.on("-c", "--config", "Resque Config (Yaml)") do |config|
-    options[:config] = config
+  opt.on("-c", "--config CONFIG", "Resque Config (Yaml)") do |config|
+    options[:config] = YAML.load_file(File.expand_path(config))
+  end
+
+  opt.on("-r", "--rakefile RAKEFILE", "Rakefile location") do |rakefile|
+    options[:rakefile] = rakefile
   end
 
   opt.on("-v", "--verbose", "Verbosity") do
     options[:verbosity] += 1
   end
 
-  opt.on("-m", "--max", "Max Children") do |max|
+  opt.on("-m", "--max MAX", "Max Children") do |max|
     options[:max_children] = max.to_i
   end
 
@@ -35,5 +41,5 @@ OptionParser.new do |opt|
 
 end.parse!
 
-kewatcher = ResqueSliders::KEWatcher.new(10)
+kewatcher = ResqueSliders::KEWatcher.new(options)
 kewatcher.run!
