@@ -1,0 +1,39 @@
+#!/usr/bin/env ruby
+
+$LOAD_PATH.unshift File.expand_path(File.dirname(__FILE__) + '/../lib')
+
+require 'optparse'
+require 'resque-sliders/kewatcher'
+
+options = {
+  :verbosity => 0,
+  :max_children => 10
+}
+
+OptionParser.new do |opt|
+  opt.banner = "Usage: kewatcher [options]"
+
+  opt.separator ""
+  opt.separator "Options:"
+
+  opt.on("-c", "--config", "Resque Config (Yaml)") do |config|
+    options[:config] = config
+  end
+
+  opt.on("-v", "--verbose", "Verbosity") do
+    options[:verbosity] += 1
+  end
+
+  opt.on("-m", "--max", "Max Children") do |max|
+    options[:max_children] = max.to_i
+  end
+
+  opt.on("-h", "--help", "This help") do
+    puts opt
+    exit
+  end
+
+end.parse!
+
+kewatcher = ResqueSliders::KEWatcher.new(10)
+kewatcher.run!

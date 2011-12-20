@@ -1,0 +1,5 @@
+Resque Sliders
+==============
+
+Description
+-----------
