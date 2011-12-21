@@ -65,7 +65,7 @@
       });
     });
   </script>
-  <% max = @sliders.max_children(host) || 'unknown (Stale)' %>
+  <% max = @sliders.max_children(host) || 'unknown (Not running)' %>
   <h2><%= host %><%= " (max: #{max})" %></h2>
   <% @sliders.queue_values(host).each_pair do |queue,value| %>
     <p>

@@ -24,14 +24,20 @@ module ResqueSliders
       @sliders_hosts_key = "plugins:resque-sliders:hosts" # name of config Hash for running daemons
       @need_queues = Array.new # keep track of pids that are needed
       @dead_queues = Array.new # keep track of pids that are dead
+      @zombie_pids = Array.new # keep track of zombie's we kill and dont watch()
 
       rails_env = ENV['RAILS_ENV'] || 'development'
       resque_config = options[:config] || 'localhost'
-      case resque_config
-      when Hash
-        Resque.redis = resque_config[rails_env]
-      when String
-        Resque.redis = resque_config
+      begin
+        case resque_config
+        when Hash
+          Resque.redis = resque_config[rails_env]
+        when String
+          Resque.redis = resque_config
+        end
+      rescue Object => e
+        puts e
+        exit 1
       end
     end
 
@@ -49,22 +55,24 @@ module ResqueSliders
 
         if not (paused? || shutdown?)
           if count % (20 / interval) == 1
-            # about every 20 seconds
+            # about every 20 seconds so we can throttle calls to redis
             queue_diff!
+            kill_zombies! # need to cleanup
             procline @pids.keys.join(', ')
           end
 
           while @pids.keys.length < @max_children && (@need_queues.length > 0 || @dead_queues.length > 0)
             queue = @dead_queues.shift || @need_queues.shift
-            @pids.store(fork { exec("QUEUE='#{queue}' rake #{'-f ' + @rakefile if @rakefile} resque:work") }, queue)
+            @pids.store(fork { exec("rake#{' -f ' + @rakefile if @rakefile} environment resque:work QUEUE=#{queue}") }, queue) # store offset if linux fork() ?
             procline @pids.keys.join(', ')
           end
         end
 
-        sleep(interval)
+        sleep(interval) # microsleep
         @pids.keys.each do |pid|
           begin
             # check to see if pid is running, by waiting for it, with a timeout
+            # Im sure Ruby 1.9 has some better helpers here
             Timeout::timeout(interval / 100) { Process.wait(pid) }
           rescue Timeout::Error
             # Timeout expired, goto next pid
@@ -217,12 +225,27 @@ module ResqueSliders
       @paused = false # unpause
     end
 
+    def kill_zombies!
+      @zombie_pids.dup.each do |pid|
+        begin
+          log! "Waiting for Zombie: #{pid}"
+          # Issue wait() to make sure pid isn't forgotten
+          Process.wait(@zombie_pids.pop)
+        rescue Errno::ECHILD
+          next
+        end
+      end
+    end
+
     def kill_child(pid)
       begin
         Process.kill("QUIT", pid) # try graceful shutdown
         log! "Child #{pid} killed. (#{@pids.keys.length-1})"
       rescue Object => e # dunno what this does but it works; dont know exception
-        log! "Child #{pid} already dead, sad day. (#{@pids.keys.length-1})"
+        log! "Child #{pid} already dead, sad day. (#{@pids.keys.length-1}) #{e}"
+      ensure
+        # Keep track of ones we issued QUIT to
+        @zombie_pids << pid
       end
     end
 
@@ -231,13 +254,10 @@ module ResqueSliders
         kill_child pid
         remove pid
       end
-      Process.waitall() # wait for it.
+      Process.waitall() # wait for all children
     end
 
     def register_self
-      #my_config = Resque.redis.hgetall(@sliders_hosts_key)
-      #if my_config.key?(@hostname)
-      #  # do shit here when its already set
       Resque.redis.hset(@sliders_hosts_key, @hostname, @max_children)
       log! "Registered Master with Redis"
     end
@@ -277,7 +297,11 @@ module ResqueSliders
             puts "Cannot create directory => #{e}"
             exit 1
           end
-          save_pid! rescue nil
+          begin
+            save_pid! # after creating dir, do save again
+          rescue # rescue anything else to stop loop
+            exit 2
+          end
         end
       end
     end
