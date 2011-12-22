@@ -1,14 +1,18 @@
-#!/usr/bin/env ruby
-
 require 'resque'
 require 'timeout'
 require 'fileutils'
 
-module ResqueSliders
-  class KEWatcher
+require 'resque-sliders/helpers'
 
+module ResqueSliders
+  # KEWatcher class provides a daemon to run on host that are running resque workers.
+  class KEWatcher
+    include Helpers
+
+    # Verbosity level (Integer)
     attr_accessor :verbosity
 
+    # Initialize daemon with options from command-line.
     def initialize(options={})
       @verbosity = (options[:verbosity] || 0).to_i
       @rakefile = File.expand_path(options[:rakefile]) rescue nil
@@ -20,8 +24,7 @@ module ResqueSliders
       @max_children = (options[:max_children] || 5).to_i
       @hostname = `hostname -s`.chomp.downcase
       @pids = Hash.new # init pids array to track running children
-      @resque_key = "plugins:resque-sliders:#{@hostname}" # Resque also as resque namespace we use
-      @sliders_hosts_key = "plugins:resque-sliders:hosts" # name of config Hash for running daemons
+      @resque_key = "#{key_prefix}:#{@hostname}" # Resque also as resque namespace we use
       @need_queues = Array.new # keep track of pids that are needed
       @dead_queues = Array.new # keep track of pids that are dead
       @zombie_pids = Array.new # keep track of zombie's we kill and dont watch()
@@ -41,13 +44,14 @@ module ResqueSliders
       end
     end
 
+    # run the daemon
     def run!(interval=0.1)
-      # run it
       interval = Float(interval)
       $0 = "KEWatcher: Starting"
       startup
 
       count = 0
+      old = 0 # know when to tell redis we have new different current pids
       loop do
         break if shutdown?
         count += 1
@@ -55,20 +59,24 @@ module ResqueSliders
 
         if not (paused? || shutdown?)
           if count % (20 / interval) == 1
-            # about every 20 seconds so we can throttle calls to redis
+            # do first and also about every 20 seconds so we can throttle calls to redis
             queue_diff!
-            kill_zombies! # need to cleanup
+            signal_hup if check_reload and not count == 1
             procline @pids.keys.join(', ')
           end
 
           while @pids.keys.length < @max_children && (@need_queues.length > 0 || @dead_queues.length > 0)
             queue = @dead_queues.shift || @need_queues.shift
-            @pids.store(fork { exec("rake#{' -f ' + @rakefile if @rakefile} environment resque:work QUEUE=#{queue}") }, queue) # store offset if linux fork() ?
+            @pids.store(fork { exec("rake#{' -f ' + @rakefile if @rakefile}#{' environment' if ENV['RAILS_ENV']} resque:work QUEUE=#{queue}") }, queue) # store offset if linux fork() ?
             procline @pids.keys.join(', ')
           end
         end
 
+        register_current_children if old != @pids.length
+        old = @pids.length
+
         sleep(interval) # microsleep
+        kill_zombies! # need to cleanup ones we've killed
         @pids.keys.each do |pid|
           begin
             # check to see if pid is running, by waiting for it, with a timeout
@@ -87,10 +95,12 @@ module ResqueSliders
       end
     end
 
+    private
+
     def startup
       enable_gc_optimizations
       register_signal_handlers
-      register_self
+      register_max_children
       $stdout.sync = true
     end
 
@@ -138,7 +148,7 @@ module ResqueSliders
       # returns an Array of 2 Arrays: to_start, to_kill
 
       goal, to_start, to_kill = [], [], []
-      Resque.redis.hgetall(@resque_key).each_pair { |queue,count| goal += [queue] * count.to_i }
+      redis_get_hash(@resque_key).each_pair { |queue,count| goal += [queue] * count.to_i }
       # to sort or not to sort?
       # goal.sort!
 
@@ -191,7 +201,9 @@ module ResqueSliders
       log "Exiting..."
       @shutdown = true
       kill_children
-      unregister_self
+      unregister_current_children
+      unregister_max_children
+      Process.waitall()
       remove_pidfile!
     end
 
@@ -254,17 +266,29 @@ module ResqueSliders
         kill_child pid
         remove pid
       end
-      Process.waitall() # wait for all children
     end
 
-    def register_self
-      Resque.redis.hset(@sliders_hosts_key, @hostname, @max_children)
-      log! "Registered Master with Redis"
+    def check_reload
+      reload_key = "#{@hostname}:reload"
+      redis_get_hash_field(host_config_key, reload_key) && redis_del_hash(host_config_key, reload_key)
     end
 
-    def unregister_self
-      Resque.redis.hdel(@sliders_hosts_key, @hostname)
-      log! "Unregistered self"
+    def register_current_children
+      redis_set_hash(host_config_key, "#{@hostname}:current_children", @pids.keys.length)
+    end
+
+    def unregister_current_children
+      redis_del_hash(host_config_key, "#{@hostname}:current_children")
+    end
+
+    def register_max_children
+      redis_set_hash(host_config_key, "#{@hostname}:max_children", @max_children)
+      log! "Registered Max Children with Redis"
+    end
+
+    def unregister_max_children
+      redis_del_hash(host_config_key, "#{@hostname}:max_children")
+      log! "Unregistered Max Children"
     end
 
     def log(message)

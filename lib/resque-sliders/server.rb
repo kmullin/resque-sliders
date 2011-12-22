@@ -18,14 +18,17 @@ module ResqueSliders
 
       app.post '/sliders/:host' do
         if params[:quantity] && params[:queue]
-          @sliders = Resque::Plugins::ResqueSliders.new
+          sliders = Resque::Plugins::ResqueSliders.new
           queue = params[:queue].split.first
           quantity = params[:quantity].to_i
           if quantity.zero?
-            @sliders.delete(params[:host], queue)
+            sliders.delete(params[:host], queue)
           else
-            @sliders.change(params[:host], queue, quantity)
+            sliders.change(params[:host], queue, quantity)
           end
+        elsif params[:reload]
+          sliders = Resque::Plugins::ResqueSliders.new
+          sliders.reload(params[:host])
         end
       end
 

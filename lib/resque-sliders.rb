@@ -3,61 +3,84 @@ $LOAD_PATH.unshift(File.expand_path(File.dirname(__FILE__) + '/../lib'))
 require 'resque'
 require 'resque/server'
 
+require 'resque-sliders/helpers'
 require 'resque-sliders/server'
 require 'resque-sliders/version'
 
+include ResqueSliders::Helpers
+
 module Resque
   module Plugins
+    # ResqueSliders class provides an interface for reading ResqueSliders::KEWatcher host config data.
     class ResqueSliders
 
+      # Hosts that have config data (queues and values), but the host is not running the daemon.
       attr_reader :stale_hosts
 
       def initialize
-        @host_map = Resque.redis.hgetall("plugins:resque-sliders:hosts")
-        @resque_key = "plugins:resque-sliders"
-        @stale_hosts = Resque.redis.keys("#{@resque_key}:*").select { |x| Resque.redis.type(x) == 'hash' }.map { |x| x = x.split(':').last; x unless x == 'hosts' or hosts.include?(x) }.compact.sort
+        @host_status = redis_get_hash(host_config_key)
+        @stale_hosts = Resque.redis.keys("#{key_prefix}:*").select { |x| Resque.redis.type(x) == 'hash' }.map { |x| y = x.split(':').last; y unless x == host_config_key or hosts.include?(y) }.compact.sort
       end
 
+      # Return Array of currently online hosts
       def hosts
-        # Return Array of currently online hosts
-        @host_map.keys.sort
+        @host_status.keys.select { |x| x unless x.split(':').last == 'reload' }.map { |x| x.split(':').first }.uniq.sort
       end
 
+      # Array of all hosts (current + stale)
       def all_hosts
-        # Array of all hosts
         (hosts + stale_hosts).sort
       end
 
+      # Return current children count or nil if Host hasn't registered itself.
+      def current_children(host)
+        @host_status["#{host}:current_children"].to_i if max_children(host)
+      end
+
+      # Return max children count or nil if Host hasn't registered itself.
       def max_children(host)
-        # Return max children count
-        @host_map[host].to_i == 0 ? nil : @host_map[host].to_i
+        max = @host_status["#{host}:max_children"].to_i
+        max == 0 ? nil : max # if Max isn't set its not running
       end
 
+      # Override max_children on host (Dangerous!)
       def max_children!(host, count)
-        # Override max_children on host (Dangerous!)
-        key = "#{@resque_key}:hosts"
-        Resque.redis.hset(key, host, count) if Resque.redis.hexists(key, host)
+        key = "#{host}:max_children"
+        redis_set_hash(host_config_key, key, count) unless stale_hosts.include?(host)
       end
 
+      # Return Array of queues on host
       def queues_on(host)
-        # Return Array of queues on host
-        Resque.redis.hkeys("#{@resque_key}:#{host}") if all_hosts.include?(host)
+        queue_values(host).keys if all_hosts.include?(host)
       end
 
+      # Return Hash: { queue => # }
       def queue_values(host)
-        # Return Hash: { queue => # }
-        Resque.redis.hgetall("#{@resque_key}:#{host}")
+        redis_get_hash("#{key_prefix}:#{host}")
       end
 
+      # Changes queues to quantiy for host.
+      # Returns boolean.
       def change(host, queue, quantity)
-        # Returns boolean
-        queue.strip!
-        Resque.redis.hset("#{@resque_key}:#{host}", queue, quantity) unless queue.empty?
+        # queue is sanitized by:
+        # replacing punctuation with spaces, strip end spaces, split on remaining whitespace, and join again on comma.
+        queue = queue.downcase.gsub(/[^a-z 0-9]/, ' ').strip.split(' ').join(',')
+        redis_set_hash("#{key_prefix}:#{host}", queue, quantity) unless queue.empty?
       end
 
+      # Deletes queue for host.
+      # Returns boolean.
       def delete(host, queue)
-        # Returns boolean
-        Resque.redis.hdel("#{@resque_key}:#{host}", queue) == 1 ? true : false
+        redis_del_hash("#{key_prefix}:#{host}", queue)
+      end
+
+      # Sets Key to reload host's KEWatcher
+      def reload(host)
+        redis_set_hash(host_config_key, "#{host}:reload", 1)
+      end
+
+      def reload?(host)
+        redis_get_hash_field(host_config_key, "#{host}:reload").to_i == 1 ? true : false
       end
 
     end
