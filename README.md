@@ -3,4 +3,3 @@ Resque Sliders
 
 Description
 -----------
-d
