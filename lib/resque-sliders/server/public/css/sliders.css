@@ -1,0 +1,30 @@
+.icons {
+  float: left;
+}
+.corner {
+  float: right;
+}
+#sliders {
+  padding: 10px;
+  width: 600px;
+  margin: 0px 20px;
+}
+#sliders > p {
+  padding: 0px;
+  margin: 10px 0px;
+}
+#sliders form {
+  padding: 10px 0px;
+  float: left;
+  margin: 0px auto;
+}
+.values,#max,#total {
+  border: 0;
+  color: #CE1212;
+  font-weight: bold;
+  font-size: 105%;
+}
+.slider {
+  width: 500px;
+  margin: 0px 20px;
+}
