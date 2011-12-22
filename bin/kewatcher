@@ -45,5 +45,5 @@ OptionParser.new do |opt|
 
 end.parse!
 
-kewatcher = ResqueSliders::KEWatcher.new(options)
+kewatcher = Resque::Plugins::ResqueSliders::KEWatcher.new(options)
 kewatcher.run!

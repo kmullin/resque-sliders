@@ -4,7 +4,7 @@ require "resque-sliders/version"
 
 Gem::Specification.new do |s|
   s.name        = "resque-sliders"
-  s.version     = ResqueSliders::Version
+  s.version     = Resque::Plugins::ResqueSliders::Version
   s.authors     = "Kevin Mullin"
   s.email       = "kevin@kpmullin.com"
   s.date        = Time.now.strftime('%Y-%m-%d')
