@@ -9,17 +9,15 @@ module Resque
         def self.registered(app)
 
           app.get '/sliders' do
-            @sliders = Commander.new
-            if params[:js]
-              content_type "application/javascript"
+            case params.keys.to_s
+            when 'js'
               public_view(params[:js], 'js')
-            elsif params[:css]
-              content_type "text/css"
+            when 'css'
               public_view(params[:css], 'css')
-            elsif params[:img]
-              content_type "image/png"
+            when 'img'
               public_view(params[:img], 'images')
             else
+              @sliders = Commander.new
               slider_view :index
             end
           end

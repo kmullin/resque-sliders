@@ -15,7 +15,8 @@ Gem::Specification.new do |s|
   s.extra_rdoc_files = ["README.md", "MIT-LICENSE"]
 
   s.files         = `git ls-files`.split("\n")
-  s.files        -= ['.rvmrc', '.gitignore'] + `git ls-files -- helpers/*`.split("\n")
+  s.files        -= ['.rvmrc', '.gitignore']
+  s.files        -= `git ls-files -- {misc,helpers}/*`.split("\n")
   s.test_files    = `git ls-files -- {test,spec,features}/*`.split("\n")
   s.executables   = `git ls-files -- bin/*`.split("\n").map{ |f| File.basename(f) }
   s.require_paths = ["lib"]
