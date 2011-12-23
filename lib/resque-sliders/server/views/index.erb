@@ -19,7 +19,7 @@
       };
       $(".HUP").click(function() {
         $.post('/sliders/<%= host %>', {reload: true}, function(data) {
-            window.location.reload();
+            window.location = '/sliders/<%= host %>';
         });
       });
       $('.new_form').submit(function() {
@@ -78,7 +78,7 @@
       $(".HUP").click(function() {
         var host = $(this).attr("id").replace('-HUP', '');
         $.post('/sliders/' + host, {reload: true}, function(data) {
-          window.location.reload();
+          window.location = "/sliders";
         });
       });
     });

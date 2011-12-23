@@ -17,6 +17,7 @@ module Resque
         # Initialize daemon with options from command-line.
         def initialize(options={})
           @verbosity = (options[:verbosity] || 0).to_i
+          @hostile_takeover = options[:force]
           @rakefile = File.expand_path(options[:rakefile]) rescue nil
           @rakefile = File.exists?(@rakefile) ? @rakefile : nil if @rakefile
           @pidfile = File.expand_path(options[:pidfile]) rescue nil
@@ -49,6 +50,10 @@ module Resque
         # run the daemon
         def run!(interval=0.1)
           interval = Float(interval)
+          if running?
+            (puts "Already running. Restart Not Forced exiting..."; exit) unless @hostile_takeover
+            restart_running!
+          end
           $0 = "KEWatcher: Starting"
           startup
 
@@ -97,7 +102,29 @@ module Resque
           end
         end
 
+        # Returns PID if already running, false otherwise
+        def running?
+          pid = `ps x -o pid,command|grep [K]EWatcher|awk '{print $1}'`.to_i
+          pid == 0 ? false : pid
+        end
+
         private
+
+        # Forces (via signal QUIT) any KEWatcher process running, located by ps and grep
+        def restart_running!
+          count = 0
+          while pid = running?
+            (puts "#{pid} wont die; giving up"; exit 2) if count > 6
+            count += 1
+            if count % 5 == 1
+              puts "Killing running KEWatcher: #{pid}"
+              Process.kill('QUIT', pid)
+            end
+            s = 3 * count
+            puts "Waiting #{s}s for it to die..."
+            sleep(s)
+          end
+        end
 
         def startup
           enable_gc_optimizations

@@ -52,7 +52,9 @@ module Resque
 
             def public_view(filename, dir='')
               begin
-                File.read(File.join(PUBLIC_PATH, dir, filename))
+                cache_control :public, :max_age => 1800
+                file = File.join(PUBLIC_PATH, dir, filename)
+                send_file file, :last_modified => File.mtime(file)
               rescue Errno::ENOENT
                 404
               end

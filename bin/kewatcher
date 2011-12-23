@@ -30,6 +30,10 @@ OptionParser.new do |opt|
     options[:pidfile] = pidfile
   end
 
+  opt.on("-f", "--force", "FORCE KILL ANY OTHER RUNNING KEWATCHERS") do
+    options[:force] = true
+  end
+
   opt.on("-v", "--verbose", "Verbosity") do
     options[:verbosity] += 1
   end
