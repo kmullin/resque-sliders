@@ -1,10 +1,8 @@
 source "http://rubygems.org"
-source "http://gems.github.com"
+#source "http://gems.github.com"
 
-gem "sinatra"
-gem "json", '1.4.6'
-gem "redis"
 gem 'resque', '1.15.0'
+gem 'resque-sliders'
 
 group :development do
   gem "shotgun"

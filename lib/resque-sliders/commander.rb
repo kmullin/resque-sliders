@@ -10,7 +10,7 @@ module Resque
 
         def initialize
           @host_status = redis_get_hash(host_config_key)
-          @stale_hosts = Resque.redis.keys("#{key_prefix}:*").select { |x| Resque.redis.type(x) == 'hash' }.map { |x| y = x.split(':').last; y unless x == host_config_key or hosts.include?(y) }.compact.sort
+          @stale_hosts = Resque.redis.keys("#{key_prefix}:*").map { |x| y = x.split(':').last; y unless x == host_config_key or hosts.include?(y) }.compact.sort
         end
 
         # Return Array of currently online hosts
@@ -36,18 +36,13 @@ module Resque
 
         # Override max_children on host (Dangerous!)
         def max_children!(host, count)
-          key = "#{host}:max_children"
-          redis_set_hash(host_config_key, key, count) unless stale_hosts.include?(host)
+          @hostname = host
+          register_setting('max_children', count)
         end
 
         # Return Array of queues on host
         def queues_on(host)
           queue_values(host).keys if all_hosts.include?(host)
-        end
-
-        # Return Hash: { queue => # }
-        def queue_values(host)
-          redis_get_hash("#{key_prefix}:#{host}")
         end
 
         # Changes queues to quantiy for host.
@@ -65,17 +60,12 @@ module Resque
           redis_del_hash("#{key_prefix}:#{host}", queue)
         end
 
-        # Sets Key to reload host's KEWatcher
+        # Sets reload flag on field of config_key to reload host's KEWatcher
         def reload(host)
           redis_set_hash(host_config_key, "#{host}:reload", 1)
-        end
-
-        def reload?(host)
-          redis_get_hash_field(host_config_key, "#{host}:reload").to_i == 1 ? true : false
         end
 
       end
     end
   end
 end
-

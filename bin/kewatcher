@@ -19,7 +19,8 @@ OptionParser.new do |opt|
   opt.separator "Options:"
 
   opt.on("-c", "--config CONFIG", "Resque Config (Yaml)") do |config|
-    options[:config] = YAML.load_file(File.expand_path(config))
+    options[:config] = YAML.load_file(File.expand_path(config)) rescue nil
+    options[:config] ||= config
   end
 
   opt.on("-r", "--rakefile RAKEFILE", "Rakefile location") do |rakefile|
@@ -48,6 +49,20 @@ OptionParser.new do |opt|
   end
 
 end.parse!
+
+begin
+  options[:config] = case options[:config]
+  when Hash
+    options[:config][ENV['RAILS_ENV'] || 'development']
+  when String
+    options[:config]
+  end
+rescue Object => e
+  puts e
+  exit 1
+end
+
+options[:config] ||= 'localhost:6379'
 
 kewatcher = Resque::Plugins::ResqueSliders::KEWatcher.new(options)
 kewatcher.run!

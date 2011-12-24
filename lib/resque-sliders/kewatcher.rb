@@ -27,24 +27,11 @@ module Resque
           @max_children = (options[:max_children] || 5).to_i
           @hostname = `hostname -s`.chomp.downcase
           @pids = Hash.new # init pids array to track running children
-          @resque_key = "#{key_prefix}:#{@hostname}" # Resque also as resque namespace we use
           @need_queues = Array.new # keep track of pids that are needed
           @dead_queues = Array.new # keep track of pids that are dead
           @zombie_pids = Array.new # keep track of zombie's we kill and dont watch()
 
-          rails_env = ENV['RAILS_ENV'] || 'development'
-          resque_config = options[:config] || 'localhost'
-          begin
-            case resque_config
-            when Hash
-              Resque.redis = resque_config[rails_env]
-            when String
-              Resque.redis = resque_config
-            end
-          rescue Object => e
-            puts e
-            exit 1
-          end
+          Resque.redis = options[:config]
         end
 
         # run the daemon
@@ -79,7 +66,7 @@ module Resque
               end
             end
 
-            register_current_children if old != @pids.length
+            register_setting('current_children', @pids.keys.length) if old != @pids.length
             old = @pids.length
 
             sleep(interval) # microsleep
@@ -110,6 +97,15 @@ module Resque
 
         private
 
+        def check_reload
+          (unregister_setting('reload'); return true) if reload?(@hostname)
+          false
+        end
+
+        def unregister_setting(setting)
+          redis_del_hash(host_config_key, "#{@hostname}:#{setting}")
+        end
+
         # Forces (via signal QUIT) any KEWatcher process running, located by ps and grep
         def restart_running!
           count = 0
@@ -127,9 +123,11 @@ module Resque
         end
 
         def startup
+          log! "Found RAILS_ENV=#{ENV['RAILS_ENV']}" if ENV['RAILS_ENV']
           enable_gc_optimizations
           register_signal_handlers
-          register_max_children
+          register_setting('max_children', @max_children)
+          log! "Registered Max Children with Redis"
           $stdout.sync = true
         end
 
@@ -177,7 +175,7 @@ module Resque
           # returns an Array of 2 Arrays: to_start, to_kill
 
           goal, to_start, to_kill = [], [], []
-          redis_get_hash(@resque_key).each_pair { |queue,count| goal += [queue] * count.to_i }
+          queue_values(@hostname).each_pair { |queue,count| goal += [queue] * count.to_i }
           # to sort or not to sort?
           # goal.sort!
 
@@ -230,8 +228,8 @@ module Resque
           log "Exiting..."
           @shutdown = true
           kill_children
-          unregister_current_children
-          unregister_max_children
+          %w(current max).each { |x| unregister_setting("#{x}_children") }
+          log! "Unregistered Max Children"
           Process.waitall()
           remove_pidfile!
         end
@@ -297,28 +295,6 @@ module Resque
           end
         end
 
-        def check_reload
-          reload_key = "#{@hostname}:reload"
-          redis_get_hash_field(host_config_key, reload_key) && redis_del_hash(host_config_key, reload_key)
-        end
-
-        def register_current_children
-          redis_set_hash(host_config_key, "#{@hostname}:current_children", @pids.keys.length)
-        end
-
-        def unregister_current_children
-          redis_del_hash(host_config_key, "#{@hostname}:current_children")
-        end
-
-        def register_max_children
-          redis_set_hash(host_config_key, "#{@hostname}:max_children", @max_children)
-          log! "Registered Max Children with Redis"
-        end
-
-        def unregister_max_children
-          redis_del_hash(host_config_key, "#{@hostname}:max_children")
-          log! "Unregistered Max Children"
-        end
 
         def log(message)
           if verbosity == 1
