@@ -6,108 +6,54 @@
   <link href="/sliders?css=sliders.css" rel="stylesheet" type="text/css" />
   <link href="/sliders?css=jqueryui-1.8.16/blitzer/jquery-ui.custom.css" rel="stylesheet" type="text/css" />
   <script src="/sliders?js=jquery-ui-1.8.16.custom.min.js" type="text/javascript"></script>
+  <script src="/sliders?js=sliders.js" type="text/javascript"></script>
 <% if params[:host] || @sliders.all_hosts.length == 1 %>
-<% host = params[:host] || @sliders.all_hosts.first %>
-  <script type="text/javascript">
-    $(document).ready(function() {
-      function set_total() {
-        var total = 0;
-        $(".values").each(function () {
-          total += parseInt($(this).val());
-        });
-        $("#total").text(total);
-      };
-      $(".HUP").click(function() {
-        $.post('/sliders/<%= host %>', {reload: true}, function(data) {
-            window.location = '/sliders/<%= host %>';
-        });
-      });
-      $('.new_form').submit(function() {
-        $.post('/sliders/<%= host %>', {quantity: 1, queue: $("#new_queue").val() }, function(data) {
-        });
-      });
-      $("#plus-one").click(function() {
-        $('.new_form').submit();
-      });
-      // make each slider, get input from div content passed from erb
-      $(".slider").each(function() {
-        var slidy = $(this);
-        var value = parseInt( slidy.text() );
-        var queue = slidy.attr("id").replace("-slider", "");
-        slidy.prev().find("input").val( value );
-        slidy.empty().slider({
-          range: "min",
-          value: value,
-          min: 0,
-          max: <%= @sliders.max_children(host) || 50 %>,
-          slide: function( event, ui ) {
-            slidy.prev().find("input").val( ui.value );
-            set_total();
-          },
-          change: function( event, ui ) {
-            $.post('/sliders/<%= host %>', {quantity: ui.value, queue: slidy.attr('id').split('-').slice(0,-1).join(',')}, function(data) {
-            });
-          },
-        });
-      });
-      set_total();
-    });
-  </script>
+  <% host = params[:host] || @sliders.all_hosts.first %>
   <% max = @sliders.max_children(host) || 'Not running' %>
 
   <h2><%= "#{host} (Total: <span id=\"total\"></span> Max: <span id=\"max\">#{max}</span>)" %>
-      <span class="ui-icon ui-icon-refresh ui-corner-all ui-state-default corner HUP"></span>
-      <% if @sliders.reload?(host) %>
-      <span class="ui-icon ui-icon-alert corner"></span>
-      <% end %>
-    </h2>
+    <span id="<%= host %>-HUP" class="ui-icon ui-icon-refresh ui-corner-all ui-state-default corner HUP"></span>
+    <% if @sliders.reload?(host) %>
+    <span class="ui-icon ui-icon-alert corner"></span>
+    <% end %>
+  </h2>
   <% @sliders.queue_values(host).each_pair do |queue,value| %>
     <p>
       <label for="value"><%= queue %>: </label>
-      <input type="text" id="<%= queue %>-value" class="values" />
+      <input type="text" id="<%= queue.gsub(',', ':') %>-value" class="values" />
     </p>
-    <div id="<%= queue.gsub(',', '-') %>-slider" class="slider"><%= value %></div>
+    <div id="<%= queue.gsub(',', ':') %>-slider" class="slider"><%= value %></div>
   <% end %>
-    <form class="new_form">
+    <form id="<%= host %>" class="new_form">
       <input type="text" id="new_queue" />
       <span id="plus-one" type="submit" class="ui-icon ui-icon-plus ui-corner-all ui-state-default" /></span>
     </form>
 <% else %>
-  <script type="text/javascript">
-    $(document).ready(function() {
-      $(".HUP").click(function() {
-        var host = $(this).attr("id").replace('-HUP', '');
-        $.post('/sliders/' + host, {reload: true}, function(data) {
-          window.location = "/sliders";
-        });
-      });
-    });
-  </script>
-    <table class="hosts">
-      <tr>
-        <th>Hostname</th>
-        <th>Current / Max Workers</th>
-        <th>HUP</th>
-      </tr>
-      <% @sliders.all_hosts.each do |host| %>
-      <tr>
-        <td><a href="/sliders/<%= host %>"><%= host %></a></td>
-        <td><% if @sliders.stale_hosts.include?(host) %>
-        Not Checked in (Stale)
-        <% else %>
-        <%= [@sliders.current_children(host), @sliders.max_children(host)].compact.join(' / ') %>
-        <% end %>
-        </td>
-        <td>
-          <ul>
-            <li class="icons"><span id="<%= host %>-HUP" class="ui-icon ui-icon-refresh ui-corner-all ui-state-default HUP"></span></li>
-            <% if @sliders.reload?(host) %>
-            <li class="icons"><span alt="testing" class="ui-icon ui-icon-alert"></span></li>
-            <% end %>
-          </ul>
-        </td>
-      </tr>
+  <table class="hosts">
+    <tr>
+      <th>Hostname</th>
+      <th>Current / Max Workers</th>
+      <th>HUP</th>
+    </tr>
+    <% @sliders.all_hosts.each do |host| %>
+    <tr>
+      <td><a href="/sliders/<%= host %>"><%= host %></a></td>
+      <td><% if @sliders.stale_hosts.include?(host) %>
+      Not Checked in (Stale)
+      <% else %>
+      <%= [@sliders.current_children(host), @sliders.max_children(host)].compact.join(' / ') %>
       <% end %>
-    </table>
+      </td>
+      <td>
+        <ul>
+          <li class="icons"><span id="<%= host %>-HUP" class="ui-icon ui-icon-refresh ui-corner-all ui-state-default HUP"></span></li>
+          <% if @sliders.reload?(host) %>
+          <li class="icons"><span class="ui-icon ui-icon-alert"></span></li>
+          <% end %>
+        </ul>
+      </td>
+    </tr>
+    <% end %>
+  </table>
 <% end %>
 </div>

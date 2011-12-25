@@ -50,8 +50,10 @@ module Resque
         def change(host, queue, quantity)
           # queue is sanitized by:
           # replacing punctuation with spaces, strip end spaces, split on remaining whitespace, and join again on comma.
-          queue = queue.downcase.gsub(/[^a-z 0-9]/, ' ').strip.split(' ').join(',')
-          redis_set_hash("#{key_prefix}:#{host}", queue, quantity) unless queue.empty?
+          # FIXME
+          queue2 = queue.downcase.gsub(/[^a-z 0-9,_\-\*]/, '').strip.split(/, */).reject {|x| (x.length == 1 and %w(- _).include?(x)) or x.empty? }.join(',')
+          raise 'Queue Different' unless queue == queue2
+          redis_set_hash("#{key_prefix}:#{host}", queue2, quantity) unless queue2.empty?
         end
 
         # Deletes queue for host.
