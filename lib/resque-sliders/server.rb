@@ -73,7 +73,7 @@ module Resque
                 else
                   %w(pause stop refresh)
               end.each do |i|
-                id = "#{host}-#{i.upcase}"
+                id = "#{host}:#{i.upcase}"
                 klass = "#{icon_base} ui-icon-#{i}"
                 klass += ' corner' unless list
                 html_out << "<span id=\"#{id}\" class=\"#{klass}\"></span>"
