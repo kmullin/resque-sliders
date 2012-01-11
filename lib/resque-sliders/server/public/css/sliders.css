@@ -1,8 +1,10 @@
 .icons {
   float: left;
+  margin: 0 2.5px 0 2.5px;
 }
 .corner {
   float: right;
+  margin: 2px 2.5px 0 2.5px;
 }
 #sliders {
   padding: 10px;

@@ -15,7 +15,7 @@ module Resque
 
         # Return Array of currently online hosts
         def hosts
-          @host_status.keys.select { |x| x unless x.split(':').last == 'reload' }.map { |x| x.split(':').first }.uniq.sort
+          @host_status.keys.select { |x| x unless %w(reload pause stop).include? x.split(':').last }.map { |x| x.split(':').first }.uniq.sort
         end
 
         # Array of all hosts (current + stale)
@@ -60,11 +60,6 @@ module Resque
         # Returns boolean.
         def delete(host, queue)
           redis_del_hash("#{key_prefix}:#{host}", queue)
-        end
-
-        # Sets reload flag on field of config_key to reload host's KEWatcher
-        def reload(host)
-          redis_set_hash(host_config_key, "#{host}:reload", 1)
         end
 
       end

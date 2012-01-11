@@ -36,15 +36,28 @@ module Resque
           redis_set_hash(host_config_key, "#{@hostname}:#{setting}", value)
         end
 
+        def unregister_setting(setting)
+          redis_del_hash(host_config_key, "#{@hostname}:#{setting}")
+        end
 
         # Signal Checking
-
 
         # Gets signal field in redis config_key for this host. Don't call directly
         def check_signal(host)
           sig = caller[0][/`([^']*)'/, 1].gsub('?', '')
           raise 'Dont call me that' unless %w(reload pause stop).include?(sig)
-          redis_get_hash_field(host_config_key, "#{host}:#{sig}").to_i == 1 ? true : false
+          if @hostname
+            # if instance variable set from running daemon, make a freshy
+            redis_get_hash_field(host_config_key, "#{@hostname}:#{sig}").to_i == 1 ? true : false
+          else
+            # otherwise cache call in a Hash
+            @host_signal_map ||= {}
+            @host_signal_map[host] ||= {}
+            unless @host_signal_map[host].has_key?(sig)
+              @host_signal_map[host] = {sig => redis_get_hash_field(host_config_key, "#{host}:#{sig}").to_i == 1 ? true : false}.update(@host_signal_map[host])
+            end
+            @host_signal_map[host][sig]
+          end
         end
 
         def reload?(host)
@@ -59,12 +72,15 @@ module Resque
           check_signal(host)
         end
 
-        # Return Hash of signals for host and their values
-        #def check_redis_for_signals(host)
-        #  configs = redis_get_hash(host_config_key)
-        #  signals = %w(reload pause stop).map { |x| [host,x].join(':') }
-        #  Hash[configs.delete_if { |k,v| ! signals.include?(k) }.map { |k,v| [k.split(':').last.to_sym ,v] }]
-        #end
+        # Set signal key given signal, host
+        def set_signal_flag(sig, host=@hostname)
+          @hostname ||= host
+          if sig == 'play'
+            %w(pause stop).each { |x| unregister_setting(x) }
+          else
+            register_setting(sig, 1)
+          end
+        end
 
       end
     end

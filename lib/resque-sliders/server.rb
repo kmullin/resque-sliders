@@ -28,6 +28,7 @@ module Resque
           end
 
           app.post '/sliders/:host' do
+            signals = params.reject { |x,y| x unless %w(pause stop play reload).include? x.to_s and y }
             if params[:quantity] && params[:queue]
               sliders = Commander.new
               queue = params[:queue].split.first
@@ -37,9 +38,12 @@ module Resque
               else
                 sliders.change(params[:host], queue, quantity)
               end
-            elsif params[:reload]
+            elsif signals.length == 1
               sliders = Commander.new
-              sliders.reload(params[:host])
+              sig = signals.keys.first.to_s
+              sliders.set_signal_flag(sig, params[:host])
+              content_type :json
+              {:signal => sig, :host => params[:host]}.to_json
             end
           end
 
@@ -55,6 +59,29 @@ module Resque
                 send_file file, :last_modified => File.mtime(file)
               rescue Errno::ENOENT
                 404
+              end
+            end
+
+            def daemon_buttons(host, list=true)
+              html_out = []
+              icon_base = 'ui-icon ui-corner-all ui-state-default'
+              case
+                when @sliders.reload?(host)
+                  %w(pause stop alert)
+                when (@sliders.pause?(host) or @sliders.stop?(host))
+                  %w(play stop refresh)
+                else
+                  %w(pause stop refresh)
+              end.each do |i|
+                id = "#{host}-#{i.upcase}"
+                klass = "#{icon_base} ui-icon-#{i}"
+                klass += ' corner' unless list
+                html_out << "<span id=\"#{id}\" class=\"#{klass}\"></span>"
+              end
+              if list
+                '<li class="icons">' + html_out.join("</li><li class=\"icons\">") + '</li>'
+              else
+                html_out.reverse.join
               end
             end
           end

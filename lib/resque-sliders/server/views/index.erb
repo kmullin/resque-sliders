@@ -12,10 +12,7 @@
   <% max = @sliders.max_children(host) || 'Not running' %>
 
   <h2><%= "#{host} (Total: <span id=\"total\"></span> Max: <span id=\"max\">#{max}</span>)" %>
-    <span id="<%= host %>-HUP" class="ui-icon ui-icon-refresh ui-corner-all ui-state-default corner HUP"></span>
-    <% if @sliders.reload?(host) %>
-    <span class="ui-icon ui-icon-alert corner"></span>
-    <% end %>
+    <%= daemon_buttons(host, false) %>
   </h2>
   <% @sliders.queue_values(host).each_pair do |queue,value| %>
     <p>
@@ -33,7 +30,7 @@
     <tr>
       <th>Hostname</th>
       <th>Current / Max Workers</th>
-      <th>HUP</th>
+      <th>Controls</th>
     </tr>
     <% @sliders.all_hosts.each do |host| %>
     <tr>
@@ -46,10 +43,7 @@
       </td>
       <td>
         <ul>
-          <li class="icons"><span id="<%= host %>-HUP" class="ui-icon ui-icon-refresh ui-corner-all ui-state-default HUP"></span></li>
-          <% if @sliders.reload?(host) %>
-          <li class="icons"><span class="ui-icon ui-icon-alert"></span></li>
-          <% end %>
+          <%= daemon_buttons(host) %>
         </ul>
       </td>
     </tr>

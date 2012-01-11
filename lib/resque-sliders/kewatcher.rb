@@ -51,26 +51,26 @@ module Resque
             count += 1
             log! ["watching:", @pids.keys.join(', '), "(#{@pids.keys.length})"].delete_if { |x| x == (nil || '') }.join(' ') if count % (10 / interval) == 1
 
+            tick = count % (20 / interval) == 1 ? true : false
+            (log! "checking signals..."; check_signals) if tick
             if not (paused? || shutdown?)
-              if count % (20 / interval) == 1
-                # do first and also about every 20 seconds so we can throttle calls to redis
-                queue_diff!
-                signal_hup if check_reload and not count == 1
-                procline @pids.keys.join(', ')
-              end
+              queue_diff! if tick # do first and also about every 20 seconds so we can throttle calls to redis
 
               while @pids.keys.length < @max_children && (@need_queues.length > 0 || @dead_queues.length > 0)
                 queue = @dead_queues.shift || @need_queues.shift
                 @pids.store(fork { exec("rake#{' -f ' + @rakefile if @rakefile}#{' environment' if ENV['RAILS_ENV']} resque:work QUEUE=#{queue}") }, queue) # store offset if linux fork() ?
-                procline @pids.keys.join(', ')
+                procline
               end
             end
 
             register_setting('current_children', @pids.keys.length) if old != @pids.length
             old = @pids.length
 
+            procline if tick
+
             sleep(interval) # microsleep
             kill_zombies! # need to cleanup ones we've killed
+
             @pids.keys.each do |pid|
               begin
                 # check to see if pid is running, by waiting for it, with a timeout
@@ -97,15 +97,6 @@ module Resque
 
         private
 
-        def check_reload
-          (unregister_setting('reload'); return true) if reload?(@hostname)
-          false
-        end
-
-        def unregister_setting(setting)
-          redis_del_hash(host_config_key, "#{@hostname}:#{setting}")
-        end
-
         # Forces (via signal QUIT) any KEWatcher process running, located by ps and grep
         def restart_running!
           count = 0
@@ -126,6 +117,7 @@ module Resque
           log! "Found RAILS_ENV=#{ENV['RAILS_ENV']}" if ENV['RAILS_ENV']
           enable_gc_optimizations
           register_signal_handlers
+          clean_signal_settings
           register_setting('max_children', @max_children)
           log! "Registered Max Children with Redis"
           $stdout.sync = true
@@ -143,10 +135,10 @@ module Resque
 
           begin
             trap('QUIT') { shutdown! }
-            trap('HUP') { signal_hup }
-            trap('USR1') { signal_usr1 }
-            trap('USR2') { signal_usr2 }
-            trap('CONT') { signal_cont }
+            trap('HUP') { log "HUP received; purging children..."; signal_hup }
+            trap('USR1') { log "USR1 received; killing little children..."; set_signal_flag('stop'); signal_usr1 }
+            trap('USR2') { log "USR2 received; not making babies"; set_signal_flag('pause'); signal_usr2 }
+            trap('CONT') { log "CONT received; making babies..."; set_signal_flag('play'); signal_cont }
           rescue ArgumentError
             warn "Signals QUIT, USR1, USR2, and/or CONT not supported."
           end
@@ -154,8 +146,34 @@ module Resque
           log! "Registered signals"
         end
 
-        def procline(string)
-          $0 = "KEWatcher (#{@pids.keys.length}): #{string}"
+        def clean_signal_settings
+          %w(pause stop reload).each { |x| unregister_setting(x) }
+        end
+
+        # Check signals, do appropriate thing
+        def check_signals
+          if reload?(@hostname)
+            log ' -> RELOAD from web-ui'
+            signal_hup
+            @dead_queues = Array.new # clear killed queues because we're reloading in same tick as queue_diff!
+          elsif stop?(@hostname)
+            log ' -> STOPPED from web-ui' if not paused? or @pids.keys.length > 0
+            signal_usr1
+          elsif pause?(@hostname)
+            log ' -> PAUSED from web-ui' unless paused?
+            signal_usr2
+          else
+            log! ' -> Continuing; no signal found'
+            @dead_queues = Array.new if paused? # clear killed queues when entering out of pause automatically, in same tick will refresh
+            signal_cont
+          end
+        end
+
+        def procline(status=nil)
+          status ||= 'stopped' if paused? and @pids.keys.empty?
+          status ||= 'paused' if paused?
+          status = "#{[@pids.keys.length,status].compact.join('-')}" unless status == 'stopped'
+          $0 = "KEWatcher (#{status}): #{@pids.keys.join(', ')}"
           log! $0
         end
 
@@ -210,18 +228,18 @@ module Resque
           [to_start, to_kill] # return whats left
         end
 
+        # removes pid completely, ignores its queues
         def remove!(pid)
-          # removes pid completely, ignores its queues
           kill_child pid
           @pids.delete(pid)
-          procline @pids.keys.join(', ')
+          procline
         end
 
+        # remove pid, and respawn same queues
         def remove(pid)
-          # remove pid, and respawn same queues
           @dead_queues.unshift(@pids[pid]) # keep track of queues that pid was running, put it at front of list
           @pids.delete(pid)
-          procline @pids.keys.join(', ')
+          procline
         end
 
         def shutdown!
@@ -242,25 +260,26 @@ module Resque
           @paused
         end
 
+        # Reload
         def signal_hup
-          log "HUP received; purging children..."
+          clean_signal_settings
           kill_children
           @paused = false # unpause after kill (restart child)
         end
 
+        # Stop
         def signal_usr1
-          log "USR1 received; killing little children..."
           kill_children
           @paused = true # pause after kill cause we're paused
         end
 
+        # Pause
         def signal_usr2
-          log "USR2 received; not making babies"
           @paused = true # paused again
         end
 
+        # Continue
         def signal_cont
-          log "CONT received; making babies..."
           @paused = false # unpause
         end
 
