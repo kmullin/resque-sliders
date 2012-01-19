@@ -31,7 +31,12 @@ module Resque
           @dead_queues = Array.new # keep track of pids that are dead
           @zombie_pids = Array.new # keep track of zombie's we kill and dont watch()
 
-          Resque.redis = options[:config]
+          Resque.redis = case options[:config]
+            when Hash
+              [options[:config]['host'], options[:config]['port']].join(':')
+            else
+              options[:config]
+          end
         end
 
         # run the daemon
