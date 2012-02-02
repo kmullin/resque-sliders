@@ -56,6 +56,7 @@ Options:
 * `Max Children (-m|--max MAX)`: Maximum number of workers to run on host (default: 10)
 * `Rakefile (-r|--rakefile RAKEFILE)`: Pass along a rakefile to use when calling `rake ... resque:work` - shouldn't be needed if run from project directory
 * `Force (-f|--force)`: Force any currently running KEWatcher processes to QUIT, waiting for it to do so, and starting in its place
+* `RAILS_ENV`: If you're using rails, you need to set your RAILS_ENV variable
 
 **Controlling the Daemon**
 
