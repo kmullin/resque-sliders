@@ -12,7 +12,9 @@
   <% max = @sliders.max_children(host) || 'Not running' %>
 
   <h2><%= "#{host} (Total: <span id=\"total\"></span> Max: <span id=\"max\">#{max}</span>)" %>
+    <span class="controls">
     <%= daemon_buttons(host, false) %>
+    </span>
   </h2>
   <% @sliders.queue_values(host).each_pair do |queue,value| %>
     <p>
@@ -43,7 +45,9 @@
       </td>
       <td>
         <ul>
+          <span class="controls">
           <%= daemon_buttons(host) %>
+          </span>
         </ul>
       </td>
     </tr>
