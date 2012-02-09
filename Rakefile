@@ -31,5 +31,8 @@ task :git_tag_version do
   git_tags = `git tag -l`.split.map { |x| x.gsub(/v/, '') }
   version = Resque::Plugins::ResqueSliders::Version
   commit_sha = `git log -1 HEAD|head -n1|awk '{print $2}'`
-  (puts version, commit_sha; `git tag v#{version} #{commit_sha}`) unless git_tags.include?(version)
+  unless git_tags.include?(version)
+    (puts version, commit_sha; `git tag v#{version} #{commit_sha}`)
+    `rake build`
+  end
 end

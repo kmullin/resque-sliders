@@ -87,3 +87,12 @@ to a file, like resque-web_init.rb, and run resque-web:
 ```
 resque-web resque-web_init.rb
 ```
+
+
+Platforms Tested
+----------------
+
+`resque-sliders` has been tested on the following platforms:
+
+* `REE-1.8.7`
+* `Ruby-1.9.3-p0`
