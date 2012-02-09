@@ -7,6 +7,7 @@ module Resque
         PUBLIC_PATH = File.join(File.dirname(__FILE__), 'server', 'public')
 
         def self.registered(app)
+          require 'json'
 
           app.get '/sliders' do
             key = params.keys.first
