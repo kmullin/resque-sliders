@@ -47,13 +47,17 @@ Options:
     -p, --pidfile PIDFILE            PID File location
     -f, --force                      FORCE KILL ANY OTHER RUNNING KEWATCHERS
     -v, --verbose                    Verbosity (Can be specified more than once, -vv)
-    -m, --max MAX                    Max Children
+    -m, --max MAX                    Max Children (default: 10)
+    -t, --time TIME                  Total Time (in minutes) to wait for ALL Workers to die before having them force killed (default: 2 minutes)
+    -w, --wait WAIT_TIME             Minimum Time (in seconds) to wait for individual Worker to die at a time (default: 25 seconds)
     -h, --help                       This help
 ```
 
 **Important Options**
 
 * `Max Children (-m|--max MAX)`: Maximum number of workers to run on host (default: 10)
+* `Total Time (-t|--time TIME)`: How long you want to wait before sending `TERM` to resque (like `kill -9`) (default: 2 minutes)
+* `Wait Time (-w|--wait WAIT_TIME)`: How many seconds **MINIMUM** we spend in blocking wait() call per worker when cleaning up zombies (default: 25 seconds)
 * `Rakefile (-r|--rakefile RAKEFILE)`: Pass along a rakefile to use when calling `rake ... resque:work` - shouldn't be needed if run from project directory
 * `Force (-f|--force)`: Force any currently running KEWatcher processes to QUIT, waiting for it to do so, and starting in its place
 * `RAILS_ENV`: If you're using rails, you need to set your RAILS_ENV variable

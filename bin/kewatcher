@@ -35,12 +35,20 @@ OptionParser.new do |opt|
     options[:force] = true
   end
 
-  opt.on("-v", "--verbose", "Verbosity") do
+  opt.on("-v", "--verbose", "Verbosity (Can be specified more than once, -vv)") do
     options[:verbosity] += 1
   end
 
-  opt.on("-m", "--max MAX", "Max Children") do |max|
+  opt.on("-m", "--max MAX", "Max Children (default: 10)") do |max|
     options[:max_children] = max.to_i
+  end
+
+  opt.on("-t", "--time TIME", "Total Time (in minutes) to wait for ALL Workers to die before having them force killed (default: 2 minutes)") do |ttime|
+    options[:ttime] = ttime.to_f
+  end
+
+  opt.on("-w", "--wait WAIT_TIME", "Minimum Time (in seconds) to wait for individual Worker to die at a time (default: 25 seconds)") do |wait|
+    options[:wait] = wait.to_f
   end
 
   opt.on("-h", "--help", "This help") do

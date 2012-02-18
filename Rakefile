@@ -1,10 +1,13 @@
-require 'bundler/gem_tasks'
-require 'resque/tasks'
+$LOAD_PATH.unshift 'helpers'
+$LOAD_PATH.unshift 'lib'
 #
 # Setup
 #
 
-$LOAD_PATH.unshift 'lib'
+
+require 'bundler/gem_tasks'
+require 'resque/tasks'
+require 'resque_job'
 
 def command?(command)
   system("type #{command} > /dev/null 2>&1")

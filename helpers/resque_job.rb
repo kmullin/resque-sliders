@@ -4,8 +4,8 @@ module Jobs
   class Stuff
     @queue = :stuff
 
-    def self.perform(stuff)
-      sleep(rand(30))
+    def self.perform(stuff=rand(30))
+      sleep(stuff)
     end
 
   end

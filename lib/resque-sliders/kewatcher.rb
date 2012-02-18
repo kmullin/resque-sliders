@@ -17,6 +17,8 @@ module Resque
         # Initialize daemon with options from command-line.
         def initialize(options={})
           @verbosity = (options[:verbosity] || 0).to_i
+          @ttime = options[:ttime] || 2
+          @zombie_wait = options[:wait] || 30
           @hostile_takeover = options[:force]
           @rakefile = File.expand_path(options[:rakefile]) rescue nil
           @rakefile = File.exists?(@rakefile) ? @rakefile : nil if @rakefile
@@ -29,7 +31,7 @@ module Resque
           @pids = Hash.new # init pids array to track running children
           @need_queues = Array.new # keep track of pids that are needed
           @dead_queues = Array.new # keep track of pids that are dead
-          @zombie_pids = Array.new # keep track of zombie's we kill and dont watch()
+          @zombie_pids = Hash.new # keep track of zombie's we kill and dont watch(), with elapsed time we've waited for it to die
 
           Resque.redis = case options[:config]
             when Hash
@@ -74,7 +76,7 @@ module Resque
             procline if tick
 
             sleep(interval) # microsleep
-            kill_zombies! # need to cleanup ones we've killed
+            kill_zombies! unless shutdown? # need to cleanup ones we've killed
 
             @pids.keys.each do |pid|
               begin
@@ -289,14 +291,36 @@ module Resque
         end
 
         def kill_zombies!
-          @zombie_pids.dup.each do |pid|
+          return if @zombie_pids.empty?
+          zombies = @zombie_pids.dup
+          wait = 60 * @ttime / zombies.length # in seconds
+          mark = Time.now # start of loop
+          zombies.each do |pid,elapsed|
+            elapsed += Time.now - mark
+            mark = Time.now # mark that we updated elapsed; time becomes relative
+            time_left = (@ttime * 60.0) - elapsed # seconds
+            wait = time_left < wait ? time_left : wait
+            wait = @zombie_wait if wait < @zombie_wait && wait > 0
+            wait = 0.1 if wait <= 0
+            log! "Waiting for Zombie: #{pid} (#{'%.2f' % wait} seconds) => #{'%.2f' % elapsed} elapsed"
             begin
-              log! "Waiting for Zombie: #{pid}"
               # Issue wait() to make sure pid isn't forgotten
-              Process.wait(@zombie_pids.pop)
-            rescue Errno::ECHILD
+              Timeout::timeout(wait) { Process.wait(pid) }
+            rescue Timeout::Error
+              elapsed += Time.now - mark
+              mark = Time.now # mark that we updated elapsed
+              log! "TIMEOUT waiting for zombie #{pid} => #{'%.2f' % elapsed} elapsed"
+              (log "Waited more than #{@ttime} minutes for #{pid}. Force quitting..."; Process.kill('TERM',pid)) if elapsed / 60.0 >= @ttime
               next
+            rescue Errno::ECHILD # child is gone
+            ensure
+              elapsed += Time.now - mark
+              mark = Time.now # mark that we updated elapsed
+              log! "Elapsed incr: #{elapsed}"
+              zombies.each_key { |x| zombies[x] = elapsed } # reset all to current elapsed
+              @zombie_pids = zombies # make sure to update root Hash
             end
+            @zombie_pids.delete(pid)
           end
         end
 
@@ -308,7 +332,7 @@ module Resque
             log! "Child #{pid} already dead, sad day. (#{@pids.keys.length-1}) #{e}"
           ensure
             # Keep track of ones we issued QUIT to
-            @zombie_pids << pid
+            @zombie_pids[pid] = 0 # set to 0 wait time
           end
         end
 
