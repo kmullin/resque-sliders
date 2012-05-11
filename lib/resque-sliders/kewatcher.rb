@@ -35,7 +35,7 @@ module Resque
 
           Resque.redis = case options[:config]
             when Hash
-              [options[:config]['host'], options[:config]['port']].join(':')
+              [options[:config]['host'], options[:config]['port'], options[:config]['db'] || 0].join(':')
             else
               options[:config]
           end
