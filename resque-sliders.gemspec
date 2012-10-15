@@ -11,14 +11,14 @@ Gem::Specification.new do |s|
   s.homepage    = "https://github.com/kmullin/resque-sliders"
   s.summary     = %q{Resque-Sliders: a plugin for resque that controls which resque workers are running on each host, from within Resque-web}
 
-  s.add_runtime_dependency 'resque', '~> 1.15.0'
+  s.add_runtime_dependency 'resque', ['>= 1.15.0', '< 2.0']
   s.extra_rdoc_files = ["README.md", "MIT-LICENSE"]
 
   s.files         = `git ls-files`.split("\n")
-  s.files        -= ['.rvmrc', '.gitignore']
-  s.files        -= `git ls-files -- {misc,helpers}/*`.split("\n")
-  s.test_files    = `git ls-files -- {test,spec,features}/*`.split("\n")
-  s.executables   = `git ls-files -- bin/*`.split("\n").map{ |f| File.basename(f) }
+  s.files        -= ['.gitignore', 'Gemfile', 'resque-sliders.gemspec']
+  s.files        -= s.files.grep(%r{^(misc|helpers)/})
+  s.test_files    = s.files.grep(%r{^(test|spec|features)/})
+  s.executables   = s.files.grep(%r{^bin/}).map { |f| File.basename(f) }
   s.require_paths = ["lib"]
   s.description = <<description
     Resque-Sliders is a plugin for Resque that enables you to control multiple hosts'
