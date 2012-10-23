@@ -13,7 +13,7 @@ begin
 rescue LoadError
 end
 require 'resque'
-require 'resque-sliders'
+require 'resque-sliders/kewatcher'
 
 #
 # make sure we can run redis

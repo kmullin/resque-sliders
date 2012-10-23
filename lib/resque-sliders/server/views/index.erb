@@ -3,10 +3,10 @@
 <h1>Sliders</h1>
 
 <div id="sliders">
-  <link href="/sliders?css=sliders.css" rel="stylesheet" type="text/css" />
-  <link href="/sliders?css=jqueryui-1.8.16/blitzer/jquery-ui.custom.css" rel="stylesheet" type="text/css" />
-  <script src="/sliders?js=jquery-ui-1.8.16.custom.min.js" type="text/javascript"></script>
-  <script src="/sliders?js=sliders.js" type="text/javascript"></script>
+  <link href="<%= url_path("/sliders?css=sliders.css") %>" rel="stylesheet" type="text/css" />
+  <link href="<%= url_path("/sliders?css=jqueryui-1.8.16/blitzer/jquery-ui.custom.css") %>" rel="stylesheet" type="text/css" />
+  <script src="<%= url_path("/sliders?js=jquery-ui-1.8.16.custom.min.js") %>" type="text/javascript"></script>
+  <script src="<%= url_path("/sliders?js=sliders.js") %>" type="text/javascript"></script>
 <% if params[:host] || @sliders.all_hosts.length == 1 %>
   <% host = params[:host] || @sliders.all_hosts.first %>
   <% max = @sliders.max_children(host) || 'Not running' %>
@@ -36,7 +36,7 @@
     </tr>
     <% @sliders.all_hosts.each do |host| %>
     <tr>
-      <td><a href="/sliders/<%= host %>"><%= host %></a></td>
+      <td><a href="<%= url_path("/sliders/#{host}") %>"><%= host %></a></td>
       <td><% if @sliders.stale_hosts.include?(host) %>
       Not Checked in (Stale)
       <% else %>

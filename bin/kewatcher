@@ -6,6 +6,7 @@ require 'rubygems'
 require 'yaml'
 require 'optparse'
 require 'resque-sliders/kewatcher'
+require 'resque-sliders/version'
 
 options = {
   :verbosity => 0,
@@ -14,6 +15,7 @@ options = {
 
 OptionParser.new do |opt|
   opt.banner = "Usage: #{File.basename($0)} [options]"
+  opt.version = Resque::Plugins::ResqueSliders::Version
 
   opt.separator ""
   opt.separator "Options:"
@@ -39,20 +41,28 @@ OptionParser.new do |opt|
     options[:verbosity] += 1
   end
 
-  opt.on("-m", "--max MAX", "Max Children (default: 10)") do |max|
-    options[:max_children] = max.to_i
+  opt.on("-m", "--max MAX", Integer, "Max Children (default: 10)") do |max|
+    options[:max_children] = max
   end
 
-  opt.on("-t", "--time TIME", "Total Time (in minutes) to wait for ALL Workers to die before having them force killed (default: 2 minutes)") do |ttime|
-    options[:ttime] = ttime.to_f
+  opt.on("-w", "--wait WAIT_TIME", Float, "Time (in seconds) to wait for worker to die before sending TERM signal (default: 20 seconds)") do |wait|
+    options[:zombie_term_wait] = wait
   end
 
-  opt.on("-w", "--wait WAIT_TIME", "Minimum Time (in seconds) to wait for individual Worker to die at a time (default: 25 seconds)") do |wait|
-    options[:wait] = wait.to_f
+  opt.on("-t", "--time MAX_TIME", Float,
+         "Max Time (in seconds) to wait for worker to die before sending KILL (-9) signal (FORCE QUIT) (default: 60)",
+         "NOTE: With Resque >= 1.22.0 force quit is handled for you so by default this is the same as:",
+         "      RESQUE_TERM_TIMEOUT=40 or the difference of MAX_TIME and WAIT_TIME",
+         "      more info: http://hone.heroku.com/resque/2012/08/21/resque-signals.html") do |wait|
+    options[:zombie_kill_wait] = wait
   end
 
-  opt.on("-h", "--help", "This help") do
-    puts opt
+  opt.on("-a", "--async", "Do NOT wait for Resque workers to die completely before spawning new workers (default: false)") do
+    options[:async] = true
+  end
+
+  opt.on("-V", "--version", "Prints Version") do
+    puts opt.version
     exit
   end
 

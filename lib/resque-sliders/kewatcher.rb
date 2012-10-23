@@ -14,24 +14,29 @@ module Resque
         # Verbosity level (Integer)
         attr_accessor :verbosity
 
+        attr_reader :pidfile, :zombie_term_wait, :zombie_kill_wait, :max_children
+
         # Initialize daemon with options from command-line.
         def initialize(options={})
-          @verbosity = (options[:verbosity] || 0).to_i
-          @ttime = options[:ttime] || 2
-          @zombie_wait = options[:wait] || 30
-          @hostile_takeover = options[:force]
+          @verbosity = (options[:verbosity] || 0).to_i # verbosity level
+          @zombie_term_wait = options[:zombie_term_wait] || 20 # time to wait before TERM
+          @zombie_kill_wait = ENV['RESQUE_TERM_TIMEOUT'].to_i + @zombie_term_wait unless ENV['RESQUE_TERM_TIMEOUT'].nil?
+          @zombie_kill_wait ||= options[:zombie_kill_wait] || 60 # time to wait before -9
+          @hostile_takeover = options[:force] # kill running kewatcher?
           @rakefile = File.expand_path(options[:rakefile]) rescue nil
           @rakefile = File.exists?(@rakefile) ? @rakefile : nil if @rakefile
           @pidfile = File.expand_path(options[:pidfile]) rescue nil
-          @pidfile = @pidfile =~ /\.pid/ ? @pidfile : @pidfile + '.pid' if @pidfile
+          @pidfile = @pidfile =~ /\.pid$/ ? @pidfile : @pidfile + '.pid' if @pidfile
           save_pid!
 
-          @max_children = (options[:max_children] || 5).to_i
+          @max_children = options[:max_children] || 10
           @hostname = `hostname -s`.chomp.downcase
           @pids = Hash.new # init pids array to track running children
           @need_queues = Array.new # keep track of pids that are needed
           @dead_queues = Array.new # keep track of pids that are dead
           @zombie_pids = Hash.new # keep track of zombie's we kill and dont watch(), with elapsed time we've waited for it to die
+          @async = options[:async] || false # sync and wait by default
+          @hupped = 0
 
           Resque.redis = case options[:config]
             when Hash
@@ -45,7 +50,10 @@ module Resque
         def run!(interval=0.1)
           interval = Float(interval)
           if running?
-            (puts "Already running. Restart Not Forced exiting..."; exit) unless @hostile_takeover
+            unless @hostile_takeover
+              puts "Already running. Restart Not Forced exiting..."
+              exit
+            end
             restart_running!
           end
           $0 = "KEWatcher: Starting"
@@ -58,22 +66,37 @@ module Resque
             count += 1
             log! ["watching:", @pids.keys.join(', '), "(#{@pids.keys.length})"].delete_if { |x| x == (nil || '') }.join(' ') if count % (10 / interval) == 1
 
-            tick = count % (20 / interval) == 1 ? true : false
+            tick = count % (20 / interval) == 1
             (log! "checking signals..."; check_signals) if tick
             if not (paused? || shutdown?)
               queue_diff! if tick # do first and also about every 20 seconds so we can throttle calls to redis
 
               while @pids.keys.length < @max_children && (@need_queues.length > 0 || @dead_queues.length > 0)
                 queue = @dead_queues.shift || @need_queues.shift
-                pid = fork do
-                  exec_string = "rake#{' -f ' + @rakefile if @rakefile}#{' environment' if ENV['RAILS_ENV']} resque:work"
-                  if RUBY_VERSION < '1.9'
-                    exec(exec_string + " QUEUE=#{queue}") # 1.8.x exec
-                  else
-                    exec({"QUEUE"=>queue}, exec_string) # 1.9.x exec
-                  end
+                exec_string = ""
+                exec_string << 'rake'
+                exec_string << " -f #{@rakefile}" if @rakefile
+                exec_string << ' environment' if ENV['RAILS_ENV']
+                exec_string << ' resque:work'
+                env_opts = {"QUEUE" => queue}
+                if Resque::Version >= '1.22.0' # when API changed for signals
+                  term_timeout = @zombie_kill_wait - @zombie_term_wait
+                  term_timeout = term_timeout > 0 ? term_timeout : 1
+                  env_opts.merge!({
+                    'TERM_CHILD' => '1',
+                    'RESQUE_TERM_TIMEOUT' => term_timeout.to_s # use new signal handling
+                  })
                 end
-                @pids.store(pid, queue) # store offset if linux fork() ?
+                exec_args = if RUBY_VERSION < '1.9'
+                  [exec_string, env_opts.map {|k,v| "#{k}=#{v}"}].flatten.join(' ')
+                else
+                  [env_opts, exec_string] # 1.9.x exec
+                end
+                pid = fork do
+                  srand # seed
+                  exec(*exec_args)
+                end
+                @pids.store(pid, queue) # store pid and queue its running if fork() ?
                 procline
               end
             end
@@ -85,6 +108,12 @@ module Resque
 
             sleep(interval) # microsleep
             kill_zombies! unless shutdown? # need to cleanup ones we've killed
+            if @hupped > 0
+              log "HUP received; purging children..."
+              signal_hup
+              do_reload!
+              @hupped -= 1
+            end
 
             @pids.keys.each do |pid|
               begin
@@ -120,7 +149,7 @@ module Resque
             count += 1
             if count % 5 == 1
               puts "Killing running KEWatcher: #{pid}"
-              Process.kill('QUIT', pid)
+              Process.kill(:TERM, pid)
             end
             s = 3 * count
             puts "Waiting #{s}s for it to die..."
@@ -150,7 +179,7 @@ module Resque
 
           begin
             trap('QUIT') { shutdown! }
-            trap('HUP') { log "HUP received; purging children..."; signal_hup }
+            trap('HUP') { @hupped += 1 }
             trap('USR1') { log "USR1 received; killing little children..."; set_signal_flag('stop'); signal_usr1 }
             trap('USR2') { log "USR2 received; not making babies"; set_signal_flag('pause'); signal_usr2 }
             trap('CONT') { log "CONT received; making babies..."; set_signal_flag('play'); signal_cont }
@@ -170,7 +199,7 @@ module Resque
           if reload?(@hostname)
             log ' -> RELOAD from web-ui'
             signal_hup
-            @dead_queues = Array.new # clear killed queues because we're reloading in same tick as queue_diff!
+            do_reload!
           elsif stop?(@hostname)
             log ' -> STOPPED from web-ui' if not paused? or @pids.keys.length > 0
             signal_usr1
@@ -179,27 +208,29 @@ module Resque
             signal_usr2
           else
             log! ' -> Continuing; no signal found'
-            @dead_queues = Array.new if paused? # clear killed queues when entering out of pause automatically, in same tick will refresh
             signal_cont
           end
         end
 
-        def procline(status=nil)
-          status ||= 'stopped' if paused? and @pids.keys.empty?
+        def procline
+          status ||= 'stopped' if paused? and (@pids.keys.empty? and @zombie_pids.keys.empty?)
           status ||= 'paused' if paused?
-          status = "#{[@pids.keys.length,status].compact.join('-')}" unless status == 'stopped'
-          $0 = "KEWatcher (#{status}): #{@pids.keys.join(', ')}"
+          status = "#{[@pids.keys.length, @zombie_pids.keys.length, status].compact.join('-')}" unless status == 'stopped'
+          name = "KEWatcher"
+          pid_str = []
+          pid_str << "R:#{@pids.keys.join(',')}" unless @pids.keys.empty?
+          pid_str << "Z:#{@zombie_pids.keys.join(',')}" unless @zombie_pids.keys.empty?
+          $0 = "#{name} (#{status}): #{pid_str.join(' ')}"
           log! $0
         end
 
         def queue_diff!
           # Forces queue diff
           # Overrides what needs to start from Redis
-          diff = queue_diff
-          to_start = diff.first
-          to_kill = diff.last
+          to_start, to_kill = queue_diff
           to_kill.each { |pid| remove! pid }
           @need_queues = to_start # authoritative answer from redis of what needs to be running
+          @dead_queues = Array.new
         end
 
         def queue_diff
@@ -209,8 +240,6 @@ module Resque
 
           goal, to_start, to_kill = [], [], []
           queue_values(@hostname).each_pair { |queue,count| goal += [queue] * count.to_i }
-          # to sort or not to sort?
-          # goal.sort!
 
           running_queues = @pids.values # check list
           goal.each do |q|
@@ -257,10 +286,19 @@ module Resque
           procline
         end
 
+        def do_reload!
+          while not @async and @zombie_pids.length > 0
+            kill_zombies!
+          end
+        end
+
         def shutdown!
           log "Exiting..."
           @shutdown = true
           kill_children
+          while @zombie_pids.keys.length > 0
+            kill_zombies!
+          end
           %w(current max).each { |x| unregister_setting("#{x}_children") }
           log! "Unregistered Max Children"
           Process.waitall()
@@ -300,47 +338,49 @@ module Resque
 
         def kill_zombies!
           return if @zombie_pids.empty?
-          zombies = @zombie_pids.dup
-          wait = 60 * @ttime / zombies.length # in seconds
-          mark = Time.now # start of loop
-          zombies.each do |pid,elapsed|
-            elapsed += Time.now - mark
-            mark = Time.now # mark that we updated elapsed; time becomes relative
-            time_left = (@ttime * 60.0) - elapsed # seconds
-            wait = time_left < wait ? time_left : wait
-            wait = @zombie_wait if wait < @zombie_wait && wait > 0
-            wait = 0.1 if wait <= 0
-            log! "Waiting for Zombie: #{pid} (#{'%.2f' % wait} seconds) => #{'%.2f' % elapsed} elapsed"
+          local_zombies = @zombie_pids.dup
+          to_delete = []
+          local_zombies.each do |pid,kill_data|
             begin
+              when_killed, times_killed = kill_data
+              elapsed = Time.now - when_killed
+              sig = if elapsed >= @zombie_term_wait and times_killed == 1
+                :TERM
+              elsif elapsed >= @zombie_kill_wait and not Resque::Version >= '1.22.0'
+                :KILL
+              else
+                nil
+              end
+              unless sig.nil?
+                log "Waited more than #{@zombie_term_wait} seconds for #{pid}. Sending #{sig}..."
+                Process.kill(sig, pid)
+                @zombie_pids.merge!({pid => [when_killed, times_killed + 1]})
+              end
+              wait = !@async ? (@zombie_term_wait - elapsed) / @zombie_pids.length : 0.01
+              wait = wait > 0 ? wait : 0.01
               # Issue wait() to make sure pid isn't forgotten
               Timeout::timeout(wait) { Process.wait(pid) }
-            rescue Timeout::Error
-              elapsed += Time.now - mark
-              mark = Time.now # mark that we updated elapsed
-              log! "TIMEOUT waiting for zombie #{pid} => #{'%.2f' % elapsed} elapsed"
-              (log "Waited more than #{@ttime} minutes for #{pid}. Force quitting..."; Process.kill('TERM',pid)) if elapsed / 60.0 >= @ttime
+              to_delete << pid
               next
-            rescue Errno::ECHILD # child is gone
-            ensure
-              elapsed += Time.now - mark
-              mark = Time.now # mark that we updated elapsed
-              log! "Elapsed incr: #{elapsed}"
-              zombies.each_key { |x| zombies[x] = elapsed } # reset all to current elapsed
-              @zombie_pids = zombies # make sure to update root Hash
+            rescue Timeout::Error
+              # waited too long so just catch and ignore, and continue
+            rescue Errno::ESRCH, Errno::ECHILD # child is gone
+              to_delete << pid
+              next
             end
-            @zombie_pids.delete(pid)
           end
+          to_delete.each { |pid| @zombie_pids.delete(pid) }
         end
 
         def kill_child(pid)
           begin
-            Process.kill("QUIT", pid) # try graceful shutdown
+            Process.kill(:QUIT, pid) # try graceful shutdown
             log! "Child #{pid} killed. (#{@pids.keys.length-1})"
           rescue Object => e # dunno what this does but it works; dont know exception
             log! "Child #{pid} already dead, sad day. (#{@pids.keys.length-1}) #{e}"
           ensure
-            # Keep track of ones we issued QUIT to
-            @zombie_pids[pid] = 0 # set to 0 wait time
+            # Keep track of ones we've killed
+            @zombie_pids[pid] = [Time.now, 1] # set to current time, killed #
           end
         end
 

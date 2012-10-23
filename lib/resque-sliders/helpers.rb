@@ -20,11 +20,11 @@ module Resque
         end
 
         def redis_set_hash(key, field, fvalue)
-          Resque.redis.hset(key, field, fvalue) == 1 ? true : false
+          Resque.redis.hset(key, field, fvalue) == 1
         end
 
         def redis_del_hash(key, field)
-          Resque.redis.hdel(key, field) == 1 ? true : false
+          Resque.redis.hdel(key, field) == 1
         end
 
         # Return Hash: { queue => # }
@@ -48,13 +48,13 @@ module Resque
           raise 'Dont call me that' unless %w(reload pause stop).include?(sig)
           if @hostname
             # if instance variable set from running daemon, make a freshy
-            redis_get_hash_field(host_config_key, "#{@hostname}:#{sig}").to_i == 1 ? true : false
+            redis_get_hash_field(host_config_key, "#{@hostname}:#{sig}").to_i == 1
           else
             # otherwise cache call in a Hash
             @host_signal_map ||= {}
             @host_signal_map[host] ||= {}
             unless @host_signal_map[host].has_key?(sig)
-              @host_signal_map[host] = {sig => redis_get_hash_field(host_config_key, "#{host}:#{sig}").to_i == 1 ? true : false}.update(@host_signal_map[host])
+              @host_signal_map[host] = {sig => redis_get_hash_field(host_config_key, "#{host}:#{sig}").to_i == 1}.update(@host_signal_map[host])
             end
             @host_signal_map[host][sig]
           end

@@ -5,8 +5,13 @@ module Jobs
     @queue = :stuff
 
     def self.perform(stuff=rand(30))
-      sleep(stuff)
+      begin
+        sleep(stuff)
+      rescue Resque::TermException
+        sleep(stuff)
+      end
     end
+
 
   end
 

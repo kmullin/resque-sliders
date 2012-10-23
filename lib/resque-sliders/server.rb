@@ -15,7 +15,7 @@ module Resque
               public_view(params[key], key == 'img' ? 'images' : key)
             else
               @sliders = Commander.new
-              redirect "/sliders/#{@sliders.all_hosts.first}" if @sliders.all_hosts.length == 1
+              redirect url_path("/sliders/#{@sliders.all_hosts.first}") if @sliders.all_hosts.length == 1
               slider_view :index
             end
           end
@@ -51,10 +51,10 @@ module Resque
             end
 
             def public_view(filename, dir='')
+              file = File.join(PUBLIC_PATH, dir, filename)
               begin
                 cache_control :public, :max_age => 1800
-                file = File.join(PUBLIC_PATH, dir, filename)
-                send_file file, :last_modified => File.mtime(file)
+                send_file file
               rescue Errno::ENOENT
                 404
               end
