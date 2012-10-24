@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <link href='https://fonts.googleapis.com/css?family=Chivo:900' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen" />
+    <link rel="stylesheet" type="text/css" href="stylesheets/pygment_trac.css" media="screen" />
+    <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print" />
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <title>Resque-sliders by kmullin</title>
+  </head>
+
+  <body>
+    <div id="container">
+      <div class="inner">
+
+        <header>
+          <h1>Resque-sliders</h1>
+          <h2>A Resque plugin that enables complete control over your running Resque Workers, all from the Resque-Web UI </h2>
+        </header>
+
+        <section id="downloads" class="clearfix">
+          <a href="https://github.com/kmullin/resque-sliders/zipball/master" id="download-zip" class="button"><span>Download .zip</span></a>
+          <a href="https://github.com/kmullin/resque-sliders/tarball/master" id="download-tar-gz" class="button"><span>Download .tar.gz</span></a>
+          <a href="https://github.com/kmullin/resque-sliders" id="view-on-github" class="button"><span>View on GitHub</span></a>
+        </section>
+
+        <hr>
+
+        <section id="main_content">
+          <h1>Resque Sliders <a href="http://travis-ci.org/kmullin/resque-sliders"><img src="https://secure.travis-ci.org/kmullin/resque-sliders.png" alt="Build Status"></a>
+</h1>
+
+<p><a href="https://github.com/kmullin/resque-sliders">github.com/kmullin/resque-sliders</a></p>
+
+<h2>Description</h2>
+
+<p>ResqueSliders is a <a href="https://github.com/defunkt/resque">Resque</a> plugin which allows you
+to control Resque workers from the Web-UI.</p>
+
+<p>From the Resque-Web UI, you can:</p>
+
+<ul>
+<li>Start workers with any queue, or combination of queues on any host, and specify how many of each should be running</li>
+<li>Pause / Stop / Restart ALL running workers</li>
+</ul><p>ResqueSliders comes in two parts:</p>
+
+<ul>
+<li>
+<code>KEWatcher</code>: A daemon that runs on any machine that needs to run Resque workers, watches over the workers and controls which ones are running</li>
+<li>
+<code>Resque-Web Plugin</code>: A bunch of slider bars, with text-input box to specify what queues to run on the workers</li>
+</ul><h2>Installation</h2>
+
+<p>Install as a gem:</p>
+
+<pre><code>$ gem install resque-sliders
+</code></pre>
+
+<h2>KEWatcher</h2>
+
+<p>This is the daemon component that runs on any host that you want to run Resque workers on. The daemon's job is to manage <strong>how many</strong> Resque workers should be running, and <strong>what</strong> they should be running. It also provides an easy way to stop all workers during maintenance or deploys.</p>
+
+<p>When the daemon first runs, it will register itself, by hostname with Redis:</p>
+
+<ul>
+<li>Adds a few persistent settings to the hash key <code>resque:plugins:resque-sliders:host_configs</code> (max_children, current_children)</li>
+<li>Gets any queues that need to be running on the host by looking at <code>resque:plugins:resque-sliders:</code> + <code>hostname</code>
+</li>
+</ul><pre><code>Usage: kewatcher [options]
+
+Options:
+    -c, --config CONFIG              Resque Config (Yaml)
+    -r, --rakefile RAKEFILE          Rakefile location
+    -p, --pidfile PIDFILE            PID File location
+    -f, --force                      FORCE KILL ANY OTHER RUNNING KEWATCHERS
+    -v, --verbose                    Verbosity (Can be specified more than once, -vv)
+    -m, --max MAX                    Max Children (default: 10)
+    -w, --wait WAIT_TIME             Time (in seconds) to wait for worker to die before sending TERM signal (default: 20 seconds)
+    -t, --time MAX_TIME              Max Time (in seconds) to wait for worker to die before sending KILL (-9) signal (FORCE QUIT) (default: 60)
+                                     NOTE: With Resque &gt;= 1.22.0 force quit is handled for you so by default this is the same as:
+                                           RESQUE_TERM_TIMEOUT=40 or the difference of MAX_TIME and WAIT_TIME
+                                           more info: http://hone.heroku.com/resque/2012/08/21/resque-signals.html
+    -a, --async                      Do NOT wait for Resque workers to die completely before spawning new workers (default: false)
+    -V, --version                    Prints Version
+</code></pre>
+
+<h3>Important Options</h3>
+
+<pre><code>    -m|--max MAX            (Max Children): Maximum number of workers to run on host (default: 10)
+    -w|--wait WAIT_TIME     (Wait Time): How long to wait before sending TERM to zombies (default: 20 seconds)
+    -t|--time TIME          (Total Time): How long to wait before sending KILL to zombies (default: 60 seconds)
+                            NOTE: Resque &gt;= 1.22.0 includes signal handling of its own to force quit, so we use it if its there, and override with our own timeout here
+    -a|--async              (Async): Should we spawn new workers before old ones have fully terminated (default: false)
+    -r|--rakefile RAKEFILE  (Rakefile): Pass along a rakefile to use when calling rake ... resque:work - shouldn't be needed if run from project directory
+    -f|--force              (Force): Force any currently running KEWatcher processes to quit, waiting for it to do so, and starting in its place
+                            RAILS_ENV: If you're using rails, you need to set your RAILS_ENV variable
+</code></pre>
+
+<h3>Controlling the Daemon</h3>
+
+<p>Once the daemon is running on each host that is going to run Resque workers, you'll need to tell them which queues to run.</p>
+
+<p>The queue configuration is done via Resque-Web interface</p>
+
+<h4>Resque-Web</h4>
+
+<p>See below for screenshots</p>
+
+<p>Buttons:</p>
+
+<ul>
+<li>
+<code>Play</code> / <code>Pause</code> - Start or Pause</li>
+<li>
+<code>Stop</code> - Stop all workers</li>
+<li>
+<code>Reload</code> - Sends HUP signal to running KEWatcher</li>
+</ul><h4>Signals</h4>
+
+<p>KEWatcher supports all the <a href="https://github.com/defunkt/resque#signals">same signals as Resque</a>:</p>
+
+<ul>
+<li>
+<code>TERM</code> / <code>INT</code> / <code>QUIT</code> - Shutdown. Gracefully kill all child Resque workers, and wait for them to finish before exiting</li>
+<li>
+<code>HUP</code>  - Restart all Resque workers by gracefully killing them, and starting new ones in their place</li>
+<li>
+<code>USR1</code> - Stop all Resque workers, and don't start any more</li>
+<li>
+<code>USR2</code> - Pause spawning of new queues, but leave current ones running</li>
+<li>
+<code>CONT</code> - Unpause. Continue spawning/managing child Resque workers</li>
+</ul><h2>Resque-Web Integration</h2>
+
+<p><strong>Main Screen:</strong> showing 3 hosts, and showing that one of the nodes is not running KEWatcher
+<img src="https://github.com/kmullin/resque-sliders/raw/master/misc/resque-sliders_main-view.png" alt="Screen 1"></p>
+
+<p><strong>Host Screen:</strong> showing different <code>QUEUE</code> combinations (comma separated) and slider bars indicating how many of each of them should run
+<img src="https://github.com/kmullin/resque-sliders/raw/master/misc/resque-sliders_host-view.png" alt="Screen 2"></p>
+
+<p>To enable the Resque-Web Integration you'll need to load ResqueSliders to enable the Sliders tab. Just add:</p>
+
+<div class="highlight"><pre><span class="nb">require</span> <span class="s1">'resque-sliders'</span>
+</pre></div>
+
+<p>to a file, like resque-web_init.rb, and run resque-web:</p>
+
+<pre><code>resque-web resque-web_init.rb
+</code></pre>
+
+<h2>Works on</h2>
+
+<p><code>resque-sliders</code> has been tested on the following platforms:</p>
+
+<h4>Ruby</h4>
+
+<ul>
+<li>1.9.3</li>
+<li>1.8.7 (ree)</li>
+<li>probabaly more...</li>
+</ul><h2>Contributing</h2>
+
+<p>Want to fix a bug? See a new feature?</p>
+
+<ol>
+<li>
+<a href="https://github.com/kmullin/resque-sliders/fork_select">Fork</a> me</li>
+<li>Create a new branch</li>
+<li>Open a <a href="https://github.com/kmullin/resque-sliders/pull/new">Pull Request</a>
+</li>
+</ol>
+        </section>
+
+        <footer>
+          Resque-sliders is maintained by <a href="https://github.com/kmullin">kmullin</a><br>
+          This page was generated by <a href="http://pages.github.com">GitHub Pages</a>. Tactile theme by <a href="http://twitter.com/jasonlong">Jason Long</a>.
+        </footer>
+
+        
+      </div>
+    </div>
+  </body>
+</html>
