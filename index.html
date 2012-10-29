@@ -60,7 +60,7 @@ to control Resque workers from the Web-UI.</p>
 <pre><code>$ gem install resque-sliders
 </code></pre>
 
-<h2>KEWatcher</h2>
+<h3>KEWatcher</h3>
 
 <p>This is the daemon component that runs on any host that you want to run Resque workers on. The daemon's job is to manage <strong>how many</strong> Resque workers should be running, and <strong>what</strong> they should be running. It also provides an easy way to stop all workers during maintenance or deploys.</p>
 
@@ -88,7 +88,7 @@ Options:
     -V, --version                    Prints Version
 </code></pre>
 
-<h3>Important Options</h3>
+<h4>Important Options</h4>
 
 <pre><code>    -m|--max MAX            (Max Children): Maximum number of workers to run on host (default: 10)
     -w|--wait WAIT_TIME     (Wait Time): How long to wait before sending TERM to zombies (default: 20 seconds)
@@ -100,26 +100,11 @@ Options:
                             RAILS_ENV: If you're using rails, you need to set your RAILS_ENV variable
 </code></pre>
 
-<h3>Controlling the Daemon</h3>
+<h4>Controlling the Daemon</h4>
 
 <p>Once the daemon is running on each host that is going to run Resque workers, you'll need to tell them which queues to run.</p>
 
-<p>The queue configuration is done via Resque-Web interface</p>
-
-<h4>Resque-Web</h4>
-
-<p>See below for screenshots</p>
-
-<p>Buttons:</p>
-
-<ul>
-<li>
-<code>Play</code> / <code>Pause</code> - Start or Pause</li>
-<li>
-<code>Stop</code> - Stop all workers</li>
-<li>
-<code>Reload</code> - Sends HUP signal to running KEWatcher</li>
-</ul><h4>Signals</h4>
+<h4>Signals</h4>
 
 <p>KEWatcher supports all the <a href="https://github.com/defunkt/resque#signals">same signals as Resque</a>:</p>
 
@@ -134,7 +119,22 @@ Options:
 <code>USR2</code> - Pause spawning of new queues, but leave current ones running</li>
 <li>
 <code>CONT</code> - Unpause. Continue spawning/managing child Resque workers</li>
-</ul><h2>Resque-Web Integration</h2>
+</ul><p>The queue configuration is done via Resque-Web interface</p>
+
+<h4>Resque-Web</h4>
+
+<p>See below for screenshots</p>
+
+<p>Buttons:</p>
+
+<ul>
+<li>
+<code>Play</code> / <code>Pause</code> - Start or Pause</li>
+<li>
+<code>Stop</code> - Stop all workers</li>
+<li>
+<code>Reload</code> - Sends HUP signal to running KEWatcher</li>
+</ul><h3>Resque-Web Integration</h3>
 
 <p><strong>Main Screen:</strong> showing 3 hosts, and showing that one of the nodes is not running KEWatcher
 <img src="https://github.com/kmullin/resque-sliders/raw/master/misc/resque-sliders_main-view.png" alt="Screen 1"></p>
