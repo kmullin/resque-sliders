@@ -20,6 +20,7 @@ ResqueSliders comes in two parts:
 * `KEWatcher`: A daemon that runs on any machine that needs to run Resque workers, watches over the workers and controls which ones are running
 * `Resque-Web Plugin`: A bunch of slider bars, with text-input box to specify what queues to run on the workers
 
+
 Installation
 ------------
 
@@ -27,8 +28,8 @@ Install as a gem:
 
     $ gem install resque-sliders
 
-KEWatcher
----------
+### KEWatcher
+
 This is the daemon component that runs on any host that you want to run Resque workers on. The daemon's job is to manage **how many** Resque workers should be running, and **what** they should be running. It also provides an easy way to stop all workers during maintenance or deploys.
 
 When the daemon first runs, it will register itself, by hostname with Redis:
@@ -55,7 +56,7 @@ Options:
     -V, --version                    Prints Version
 ```
 
-### Important Options
+#### Important Options
 
 ```
     -m|--max MAX            (Max Children): Maximum number of workers to run on host (default: 10)
@@ -68,9 +69,19 @@ Options:
                             RAILS_ENV: If you're using rails, you need to set your RAILS_ENV variable
 ```
 
-### Controlling the Daemon
+#### Controlling the Daemon
 
 Once the daemon is running on each host that is going to run Resque workers, you'll need to tell them which queues to run.
+
+#### Signals
+
+KEWatcher supports all the [same signals as Resque](https://github.com/defunkt/resque#signals):
+
+* `TERM` / `INT` / `QUIT` - Shutdown. Gracefully kill all child Resque workers, and wait for them to finish before exiting
+* `HUP`  - Restart all Resque workers by gracefully killing them, and starting new ones in their place
+* `USR1` - Stop all Resque workers, and don't start any more
+* `USR2` - Pause spawning of new queues, but leave current ones running
+* `CONT` - Unpause. Continue spawning/managing child Resque workers
 
 The queue configuration is done via Resque-Web interface
 
@@ -84,19 +95,9 @@ Buttons:
 * `Stop` - Stop all workers
 * `Reload` - Sends HUP signal to running KEWatcher
 
-#### Signals
 
-KEWatcher supports all the [same signals as Resque](https://github.com/defunkt/resque#signals):
+### Resque-Web Integration
 
-* `TERM` / `INT` / `QUIT` - Shutdown. Gracefully kill all child Resque workers, and wait for them to finish before exiting
-* `HUP`  - Restart all Resque workers by gracefully killing them, and starting new ones in their place
-* `USR1` - Stop all Resque workers, and don't start any more
-* `USR2` - Pause spawning of new queues, but leave current ones running
-* `CONT` - Unpause. Continue spawning/managing child Resque workers
-
-
-Resque-Web Integration
-----------------------
 **Main Screen:** showing 3 hosts, and showing that one of the nodes is not running KEWatcher
 ![Screen 1](https://github.com/kmullin/resque-sliders/raw/master/misc/resque-sliders_main-view.png)
 
