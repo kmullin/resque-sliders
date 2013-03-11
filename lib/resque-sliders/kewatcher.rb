@@ -136,13 +136,17 @@ module Resque
           end
         end
 
+        def child_pid_file_name
+          "#{@pidfile}_children.pid"
+        end
+
         def write_children_pids
-          File.open("#{@pidfile}.children", 'w') {|f| f.write(MultiJson.encode(@pids.keys))}
+          File.open(child_pid_file_name, 'w') {|f| f.write(MultiJson.encode(@pids.keys))}
         end
 
         def kill_orphans
           begin
-            orphan_pids = MultiJson.decode(IO.read("#{@pidfile}.children"))
+            orphan_pids = MultiJson.decode(IO.read(child_pid_file_name))
             orphan_pids.each do |orphan|
               kill_child(orphan)
             end
