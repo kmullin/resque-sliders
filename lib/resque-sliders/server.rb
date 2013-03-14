@@ -34,7 +34,7 @@ module Resque
               if quantity.zero?
                 dc.distributed_delete(queue)
               else
-                dc.distributed_change(params[:queue], params[:quantity])
+                dc.distributed_change(queue, quantity)
               end
             end
           end
