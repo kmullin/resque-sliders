@@ -20,6 +20,12 @@ module Resque
           end
         end
 
+        def all_queue_values
+          all_hosts.map{|host| queue_values(host)}.inject({}) do |acc, host|
+            acc.merge(host){|key, v1,v2| v1.to_i + v2.to_i}
+          end
+        end
+
         def clear_queues!
           # If this is performed without re-adding hosts that are currently stale they will be lost!
           all_hosts.each do |host|
