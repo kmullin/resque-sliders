@@ -47,11 +47,11 @@ module Resque
 
         # Changes queues to quantiy for host.
         # Returns boolean.
-        def change(host, queue, quantity)
+        def change(host, queue, quantity, force = false)
           # queue is sanitized by:
           # replacing punctuation with spaces, strip end spaces, split on remaining whitespace, and join again on comma.
           queue2 = queue.gsub(/['":]/, '').strip.gsub(/\s+/, ',').split(/, */).reject { |x| x.nil? or x.empty? }.join(',')
-          raise 'Queue Different' unless queue == queue2
+          raise 'Queue Different' unless (force || queue == queue2)
           redis_set_hash("#{key_prefix}:#{host}", queue2, quantity) unless queue2.empty?
         end
 
