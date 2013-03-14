@@ -28,11 +28,15 @@ module Resque
           app.post '/sliders/queues' do
             @debug = params
             if params[:quantity] && params[:queue]
-              distributed_commander = DistributedCommander.new
-
+              dc = DistributedCommander.new
+              queue = params[:queue].split.first
+              quantity = params[:quantity].to_i
+              if quantity.zero?
+                dc.distributed_delete(queue)
+              else
+                dc.distributed_change(params[:queue], params[:quantity])
+              end
             end
-            slider_view :debug
-
           end
 
           app.get '/sliders/:host' do

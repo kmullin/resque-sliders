@@ -33,6 +33,12 @@ module Resque
           end
         end
 
+        def distributed_delete(queue)
+          all_hosts.each do |host|
+            delete(host, queue)
+          end
+        end
+
         def stop_all_hosts!
           all_hosts.each do |host|
             redis_set_hash(host_config_key, "#{host}:stop", 1)
@@ -55,13 +61,6 @@ module Resque
           @stale_hosts << host_name
           @stale_hosts.sort!.uniq!
         end
-
-        def distributed_delete(queue)
-          all_hosts.each do |host|
-            delete(host, queue)
-          end
-        end
-
       end
     end
   end
