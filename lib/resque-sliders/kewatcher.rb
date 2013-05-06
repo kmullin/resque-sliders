@@ -31,6 +31,8 @@ module Resque
 
           @max_children = options[:max_children] || 10
           @hostname = `hostname -s`.chomp.downcase
+          @max_running_time = options[:max_run_time] || 60*60 # kill child processes after an hour
+          @pids_start_time = Hash.new # keeps track of the time we started the child
           @pids = Hash.new # init pids array to track running children
           @need_queues = Array.new # keep track of pids that are needed
           @dead_queues = Array.new # keep track of pids that are dead
@@ -43,6 +45,12 @@ module Resque
               [options[:config]['host'], options[:config]['port'], options[:config]['db'] || 0].join(':')
             else
               options[:config]
+          end
+        end
+
+        def kill_long_running_processes!
+          @pids_start_time.each do |pid, start_time|
+            Process.kill(:KILL, pid) if Time.now.to_i > @max_run_time + start_time
           end
         end
 
@@ -63,6 +71,7 @@ module Resque
           old = 0 # know when to tell redis we have new different current pids
           loop do
             break if shutdown?
+            kill_long_running_processes!
             count += 1
             log! ["watching:", @pids.keys.join(', '), "(#{@pids.keys.length})"].delete_if { |x| x == (nil || '') }.join(' ') if count % (10 / interval) == 1
 
@@ -97,6 +106,7 @@ module Resque
                   exec(*exec_args)
                 end
                 @pids.store(pid, queue) # store pid and queue its running if fork() ?
+                @pids_start_time.store(pid, Time.now.to_i)
                 procline
               end
             end

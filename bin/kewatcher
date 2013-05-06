@@ -25,6 +25,10 @@ OptionParser.new do |opt|
     options[:config] ||= config
   end
 
+  opt.on("-max-time", "--max-run-time SECONDS", "Number of seconds that a process must finish within") do |num_secs|
+    options[:max_run_time] = num_secs
+  end
+
   opt.on("-r", "--rakefile RAKEFILE", "Rakefile location") do |rakefile|
     options[:rakefile] = rakefile
   end
