@@ -42,6 +42,8 @@ Usage: kewatcher [options]
 
 Options:
     -c, --config CONFIG              Resque Config (Yaml)
+    -max-time, --max-run-time SECONDS Number of seconds that a process
+must finish within
     -r, --rakefile RAKEFILE          Rakefile location
     -p, --pidfile PIDFILE            PID File location
     -f, --force                      FORCE KILL ANY OTHER RUNNING KEWATCHERS
