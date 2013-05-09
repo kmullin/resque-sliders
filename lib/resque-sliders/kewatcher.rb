@@ -179,11 +179,15 @@ module Resque
           while pid = running?
             (puts "#{pid} wont die; giving up"; exit 2) if count > 6
             count += 1
-            if count % 5 == 1
+            case count 
+            when 1
               puts "Killing running KEWatcher: #{pid}"
               Process.kill(:TERM, pid)
+            when 5
+              puts "Killing running KEWatcher: #{pid}.. with FIRE!"
+              Process.kill(:KILL, pid)
             end
-            s = 3 * count
+            s = 2 * count
             puts "Waiting #{s}s for it to die..."
             sleep(s)
           end
