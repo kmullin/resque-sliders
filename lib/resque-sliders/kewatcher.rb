@@ -50,7 +50,7 @@ module Resque
 
         def kill_long_running_processes!
           @pids_start_time.each do |pid, start_time|
-            Process.kill(:KILL, pid) if Time.now.to_i > @max_run_time + start_time
+            Process.kill(:KILL, pid) if Time.now.to_i > @max_running_time + start_time
           end
         end
 
