@@ -32,7 +32,6 @@ module Resque
           @max_children = options[:max_children] || 10
           @hostname = `hostname -s`.chomp.downcase
           @max_running_time = options[:max_run_time] || 60*60 # kill child processes after an hour
-          @pids_start_time = Hash.new # keeps track of the time we started the child
           @pids = Hash.new # init pids array to track running children
           @need_queues = Array.new # keep track of pids that are needed
           @dead_queues = Array.new # keep track of pids that are dead
@@ -49,8 +48,14 @@ module Resque
         end
 
         def kill_long_running_processes!
-          @pids_start_time.each do |pid, start_time|
-            Process.kill(:KILL, pid) if Time.now.to_i > @max_running_time + start_time
+          #$1 is the pid, $NF is the time the process was created
+          child_processes_str = `ps -A -o pid,command | grep -P -e "Processing .* since [[:digit:]]+" | awk '{print $1 ":" $(NF)}'`
+          pids_times = child_processes_str.split("\n").map do |pid_time|
+            #starts as "12345:123456789876543"
+            pid_time.split(":").map{|n| n.to_i}
+          end
+          pids_times.each do |pid, start_time|
+            Process.kill(:KILL, pid) if Time.now.to_i > start_time + @max_running_time
           end
         end
 
@@ -106,7 +111,6 @@ module Resque
                   exec(*exec_args)
                 end
                 @pids.store(pid, queue) # store pid and queue its running if fork() ?
-                @pids_start_time.store(pid, Time.now.to_i)
                 procline
               end
             end
