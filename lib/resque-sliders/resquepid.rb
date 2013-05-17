@@ -5,7 +5,7 @@ module Resque
 
         attr_reader :queue, :pid, :start_time
 
-        def initialize(exec_string, env_opts, queue)
+        def initialize(exec_string, queue, env_opts={})
            @queue = queue
            exec_args = if RUBY_VERSION < '1.9'
              [exec_string, env_opts.map {|k,v| "#{k}=#{v}"}].flatten.join(' ')
@@ -19,13 +19,8 @@ module Resque
            @start_time = Time.now
         end
 
-        def inspect
-          return @pid
-        end
+        # TODO implement to string, so return pid # as most used
 
-        def __str__
-          @pid.nil? ? self : @pid
-        end
       end
     end
   end
