@@ -3,6 +3,7 @@ require 'timeout'
 require 'fileutils'
 
 require 'resque-sliders/helpers'
+require 'resque-sliders/resquepid'
 
 module Resque
   module Plugins
@@ -31,9 +32,9 @@ module Resque
 
           @max_children = options[:max_children] || 10
           @hostname = `hostname -s`.chomp.downcase
-          @pids = Hash.new # init pids array to track running children
-          @need_queues = Array.new # keep track of pids that are needed
-          @dead_queues = Array.new # keep track of pids that are dead
+          @pids = Array.new # init pids stack to track running children
+          @need_queues = Array.new # keep track of queues that are needed
+          @dead_queues = Array.new # keep track of queues that are dead
           @zombie_pids = Hash.new # keep track of zombie's we kill and dont watch(), with elapsed time we've waited for it to die
           @async = options[:async] || false # sync and wait by default
           @hupped = 0
@@ -73,8 +74,7 @@ module Resque
 
               while @pids.keys.length < @max_children && (@need_queues.length > 0 || @dead_queues.length > 0)
                 queue = @dead_queues.shift || @need_queues.shift
-                exec_string = ""
-                exec_string << 'rake'
+                exec_string = 'rake'
                 exec_string << " -f #{@rakefile}" if @rakefile
                 exec_string << ' environment' if ENV['RAILS_ENV']
                 exec_string << ' resque:work'
@@ -87,16 +87,16 @@ module Resque
                     'RESQUE_TERM_TIMEOUT' => term_timeout.to_s # use new signal handling
                   })
                 end
-                exec_args = if RUBY_VERSION < '1.9'
-                  [exec_string, env_opts.map {|k,v| "#{k}=#{v}"}].flatten.join(' ')
-                else
-                  [env_opts, exec_string] # 1.9.x exec
-                end
-                pid = fork do
-                  srand # seed
-                  exec(*exec_args)
-                end
-                @pids.store(pid, queue) # store pid and queue its running if fork() ?
+                #exec_args = if RUBY_VERSION < '1.9'
+                #  [exec_string, env_opts.map {|k,v| "#{k}=#{v}"}].flatten.join(' ')
+                #else
+                #  [env_opts, exec_string] # 1.9.x exec
+                #end
+                #pid = fork do
+                #  srand # seed
+                #  exec(*exec_args)
+                #end
+                @pids.push(ResquePid.new(exec_string, env_opts, queue)) # store pid and queue and timestamp when started its running if fork()
                 procline
               end
             end
@@ -253,10 +253,11 @@ module Resque
           end
 
           @pids.dup.each_pair do |k,v|
-            if running_queues.include?(v)
+            queue, start_time = v
+            if running_queues.include?(queue)
               # whatever is left over in this checklist shouldn't be running
               to_kill << k
-              running_queues.delete_at(running_queues.index(v))
+              running_queues.delete_at(running_queues.index(queue))
             end
           end
 
