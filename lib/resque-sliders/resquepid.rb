@@ -3,10 +3,11 @@ module Resque
     module ResqueSliders
       class ResquePid
 
-        attr_reader :queue, :pid, :start_time
+        attr_reader :queue, :pid, :start_time, :env
 
-        def initialize(exec_string, queue, env_opts={})
-           @queue = queue
+        def initialize(exec_string, env_opts)
+           @queue = env_opts['QUEUE']
+           @env = env_opts
            exec_args = if RUBY_VERSION < '1.9'
              [exec_string, env_opts.map {|k,v| "#{k}=#{v}"}].flatten.join(' ')
            else
@@ -19,7 +20,17 @@ module Resque
            @start_time = Time.now
         end
 
-        # TODO implement to string, so return pid # as most used
+        def to_s
+          @pid.to_s
+        end
+
+        def inspect
+          @pid
+        end
+
+        def to_i
+          @pid
+        end
 
       end
     end

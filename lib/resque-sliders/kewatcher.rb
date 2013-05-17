@@ -65,14 +65,14 @@ module Resque
           loop do
             break if shutdown?
             count += 1
-            log! ["watching:", @pids.keys.join(', '), "(#{@pids.keys.length})"].delete_if { |x| x == (nil || '') }.join(' ') if count % (10 / interval) == 1
+            log! ["watching:", @pids.join(', '), "(#{@pids.length})"].delete_if { |x| x == (nil || '') }.join(' ') if count % (10 / interval) == 1
 
             tick = count % (20 / interval) == 1
             (log! "checking signals..."; check_signals) if tick
             if not (paused? || shutdown?)
               queue_diff! if tick # do first and also about every 20 seconds so we can throttle calls to redis
 
-              while @pids.keys.length < @max_children && (@need_queues.length > 0 || @dead_queues.length > 0)
+              while @pids.length < @max_children && (@need_queues.length > 0 || @dead_queues.length > 0)
                 queue = @dead_queues.shift || @need_queues.shift
                 exec_string = 'rake'
                 exec_string << " -f #{@rakefile}" if @rakefile
@@ -87,21 +87,12 @@ module Resque
                     'RESQUE_TERM_TIMEOUT' => term_timeout.to_s # use new signal handling
                   })
                 end
-                #exec_args = if RUBY_VERSION < '1.9'
-                #  [exec_string, env_opts.map {|k,v| "#{k}=#{v}"}].flatten.join(' ')
-                #else
-                #  [env_opts, exec_string] # 1.9.x exec
-                #end
-                #pid = fork do
-                #  srand # seed
-                #  exec(*exec_args)
-                #end
-                @pids.push(ResquePid.new(exec_string, env_opts, queue)) # store pid and queue and timestamp when started its running if fork()
+                @pids.push(ResquePid.new(exec_string, env_opts)) # store pid and queue and timestamp when started its running if fork()
                 procline
               end
             end
 
-            register_setting('current_children', @pids.keys.length) if old != @pids.length
+            register_setting('current_children', @pids.length) if old != @pids.length
             old = @pids.length
 
             procline if tick
@@ -115,17 +106,17 @@ module Resque
               @hupped -= 1
             end
 
-            @pids.keys.each do |pid|
+            @pids.each do |pid|
               begin
                 # check to see if pid is running, by waiting for it, with a timeout
                 # Im sure Ruby 1.9 has some better helpers here
-                Timeout::timeout(interval / 100) { Process.wait(pid) }
+                Timeout::timeout(interval / 100) { Process.wait(pid.to_i) }
               rescue Timeout::Error
                 # Timeout expired, goto next pid
                 next
               rescue Errno::ECHILD
                 # if no pid exists to wait for, remove it
-                log! (paused? || shutdown?) ? "#{pid} (#{@pids[pid]}) child died; no one cares..." : "#{pid} (#{@pids[pid]}) child died; spawning another..."
+                log! (paused? || shutdown?) ? "#{pid} (#{pid.queue}) child died; no one cares..." : "#{pid} (#{pid.queue}) child died; spawning another..."
                 remove pid
                 break
               end
@@ -201,7 +192,7 @@ module Resque
             signal_hup
             do_reload!
           elsif stop?(@hostname)
-            log ' -> STOPPED from web-ui' if not paused? or @pids.keys.length > 0
+            log ' -> STOPPED from web-ui' if not paused? or @pids.length > 0
             signal_usr1
           elsif pause?(@hostname)
             log ' -> PAUSED from web-ui' unless paused?
@@ -213,12 +204,12 @@ module Resque
         end
 
         def procline
-          status ||= 'stopped' if paused? and (@pids.keys.empty? and @zombie_pids.keys.empty?)
+          status ||= 'stopped' if paused? and (@pids.empty? and @zombie_pids.keys.empty?)
           status ||= 'paused' if paused?
-          status = "#{[@pids.keys.length, @zombie_pids.keys.length, status].compact.join('-')}" unless status == 'stopped'
+          status = "#{[@pids.length, @zombie_pids.keys.length, status].compact.join('-')}" unless status == 'stopped'
           name = "KEWatcher"
           pid_str = []
-          pid_str << "R:#{@pids.keys.join(',')}" unless @pids.keys.empty?
+          pid_str << "R:#{@pids.join(',')}" unless @pids.empty?
           pid_str << "Z:#{@zombie_pids.keys.join(',')}" unless @zombie_pids.keys.empty?
           $0 = "#{name} (#{status}): #{pid_str.join(' ')}"
           log! $0
@@ -241,7 +232,7 @@ module Resque
           goal, to_start, to_kill = [], [], []
           queue_values(@hostname).each_pair { |queue,count| goal += [queue] * count.to_i }
 
-          running_queues = @pids.values # check list
+          running_queues = @pids.map { |p| p.queue }
           goal.each do |q|
             if running_queues.include?(q)
               # delete from checklist cause its already running
@@ -252,21 +243,20 @@ module Resque
             end
           end
 
-          @pids.dup.each_pair do |k,v|
-            queue, start_time = v
-            if running_queues.include?(queue)
+          @pids.dup.each do |pid|
+            if running_queues.include?(pid.queue)
               # whatever is left over in this checklist shouldn't be running
-              to_kill << k
-              running_queues.delete_at(running_queues.index(queue))
+              to_kill << pid
+              running_queues.delete_at(running_queues.index(pid.queue))
             end
           end
 
-          if (to_start.length + @pids.keys.length - to_kill.length) > @max_children
+          if (to_start.length + @pids.length - to_kill.length) > @max_children
             # if to_start with existing minus whats to be killed is still greater than max children
             log "WARN: need to start too many children, please raise max children"
           end
 
-          kill_queues = to_kill.map { |x| @pids[x] }
+          kill_queues = to_kill.map { |pid| pid.queue }
           log! ["GOTTA START:", to_start.map { |x| "#{x} (#{to_start.count(x)})" }.uniq.join(', '), "= #{to_start.length}"].delete_if { |x| x == (nil || '') }.join(' ')
           log! ["GOTTA KILL:", kill_queues.map { |x| "#{x} (#{kill_queues.count(x)})" }.uniq.join(', '), "= #{to_kill.length}"].delete_if { |x| x == (nil || '') }.join(' ')
 
@@ -282,7 +272,7 @@ module Resque
 
         # remove pid, and respawn same queues
         def remove(pid)
-          @dead_queues.unshift(@pids[pid]) # keep track of queues that pid was running, put it at front of list
+          @dead_queues.unshift(pid.queue) # keep track of queues that pid was running, put it at front of list
           @pids.delete(pid)
           procline
         end
@@ -376,9 +366,9 @@ module Resque
         def kill_child(pid)
           begin
             Process.kill(:QUIT, pid) # try graceful shutdown
-            log! "Child #{pid} killed. (#{@pids.keys.length-1})"
+            log! "Child #{pid} killed. (#{@pids.length-1})"
           rescue Object => e # dunno what this does but it works; dont know exception
-            log! "Child #{pid} already dead, sad day. (#{@pids.keys.length-1}) #{e}"
+            log! "Child #{pid} already dead, sad day. (#{@pids.length-1}) #{e}"
           ensure
             # Keep track of ones we've killed
             @zombie_pids[pid] = [Time.now, 1] # set to current time, killed #
@@ -386,7 +376,7 @@ module Resque
         end
 
         def kill_children
-          @pids.dup.keys.each do |pid|
+          @pids.dup.each do |pid|
             kill_child pid
             remove pid
           end
