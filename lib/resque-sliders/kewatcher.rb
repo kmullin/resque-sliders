@@ -350,7 +350,7 @@ module Resque
               wait = !@async ? (@zombie_term_wait - elapsed) / @zombie_pids.length : 0.01
               wait = wait > 0 ? wait : 0.01
               # Issue wait() to make sure pid isn't forgotten
-              Timeout::timeout(wait) { Process.wait(pid) }
+              Timeout::timeout(wait) { Process.wait(pid.to_i) }
               to_delete << pid
               next
             rescue Timeout::Error
@@ -365,7 +365,7 @@ module Resque
 
         def kill_child(pid)
           begin
-            Process.kill(:QUIT, pid) # try graceful shutdown
+            Process.kill(:QUIT, pid.to_i) # try graceful shutdown
             log! "Child #{pid} killed. (#{@pids.length-1})"
           rescue Object => e # dunno what this does but it works; dont know exception
             log! "Child #{pid} already dead, sad day. (#{@pids.length-1}) #{e}"
