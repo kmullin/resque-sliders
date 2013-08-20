@@ -44,7 +44,7 @@ module Resque
             else
               options[:config]
           end
-          if options[:config]['namespace'].present?
+          unless options[:config]['namespace'].nil?
             puts options[:config]['namespace']
             Resque.redis.namespace = options[:config]['namespace']
           end
