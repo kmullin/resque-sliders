@@ -19,6 +19,17 @@ module Resque
               slider_view :index
             end
           end
+          app.get '/proccess_hup/:host/:pid' do
+            Resque.workers.each do |w|
+              host, pid, queues = w.to_s.split(':')
+              if (params[:host] == host && params[:pid] == pid)
+                Resque.redis.sadd(:terminate, w)
+              end
+            end
+            {:status => "ok"}.to_json
+          end
+
+
 
           app.get '/sliders/:host' do
             @sliders = Commander.new

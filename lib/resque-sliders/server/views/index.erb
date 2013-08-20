@@ -55,3 +55,62 @@
   </table>
 <% end %>
 </div>
+<br style ="clear: both;" />
+<br style ="clear: both;" />
+<h1> Workers </h1>
+<% @workers = Resque.workers %>
+  <table class="table table-bordered workers">
+    <tr>
+      <th>&nbsp;</th>
+      <th>Where</th>
+      <th>Queues</th>
+      <th>Processing</th>
+      <th>Actions</th>
+    </tr>
+    <% @workers.each do |worker| %>
+    <tr class="<% worker.state %>">
+      <td class="icon"></td>
+
+      <% host, pid, queues = worker.to_s.split(':') %>
+      <td class="where"><%= host %>:<%= pid %></td>
+      <td class="queues">
+        <% queues.split(',').each do |queue_name| %>
+        <%= queue_name %>
+        <% end %>
+      </td>
+      <td class="process">
+        <% data = worker.processing || {} %>
+        <% if data['queue'] %>
+          <code><%= data['payload']['class'] %></code>
+          <small><%= data['run_at'] %></small>
+        <% else %>
+          <span class="waiting">Waiting for a job...</span>
+        <% end %>
+      </td>
+      <td>
+        <a href="" class="pid-hup" data-host="<%= host %>" data-pid="<%= pid %>">KILL</a>
+      </td>
+    </tr>
+    <% end %>
+    <% if @workers.empty? %>
+    <tr>
+      <td colspan="5" class="no-data">There are no registered workers</td>
+    </tr>
+    <% end %>
+  </table>
+<script>
+  
+  $(".pid-hup").click(function(e) {
+        e.preventDefault();
+        host = $(this).attr("data-host");
+        pid = $(this).attr("data-pid");
+        $.ajax({
+          type : "GET",
+          url : '../proccess_hup/' + host + '/' + pid,
+          success: function(obj){
+            console.log(obj)
+            alert("Killing")
+          }
+        });
+  });
+</script>
