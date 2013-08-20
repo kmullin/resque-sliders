@@ -44,6 +44,11 @@ module Resque
             else
               options[:config]
           end
+          if options[:config]['namespace'].present?
+            Resque.redis.namespace = options[:config]['namespace']
+          end
+
+
         end
 
         # run the daemon
