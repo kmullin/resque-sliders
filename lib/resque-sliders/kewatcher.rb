@@ -260,7 +260,7 @@ module Resque
           # returns an Array of 2 Arrays: to_start, to_kill
 
           to_terminate_forced = Array(Resque.redis.smembers(:terminate))
-          puts to_terminate_forced.inspect
+          puts "Need to terminate:: #{to_terminate_forced.inspect}"
 
           to_terminate_forced.each do |t|
              host, pid, queues = t.to_s.split(':')
