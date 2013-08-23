@@ -172,13 +172,16 @@ module Resque
           log! "Registered Max Children with Redis"
           # LOAD A YML FILE SPECIFYING RESQUE QUEUES FOR THIS INSTANCE OPTIONALLY
           commander = Commander.new
-          puts @boot_queues.inspect
-          @boot_queues.each_pair do |queue, quantity|
-            # USE COMMANDER TO DO STUFF IF THE YML IS ENABLED
-            log! "Registering #{quantity} workers for #{queue} on #{@hostname}}"
-            commander.change(@hostname, queue, quantity)
+          # USE COMMANDER TO DO STUFF IF THE YML IS ENABLED
+          if commander.queues_on(@hostname).empty?
+            # If queues are already configured don't reconfigure
+            @boot_queues.each_pair do |queue, quantity|   
+              log! "Registering #{quantity} workers for #{queue} on #{@hostname}}"
+              commander.change(@hostname, queue, quantity)
+            end
+          else
+            log! "Queues are already configured for this host don't provision"
           end
-
 
 
 
@@ -256,8 +259,6 @@ module Resque
           # figures what is running and does a diff
           # returns an Array of 2 Arrays: to_start, to_kill
 
-          puts "Queue Diff"
-          puts "My hostname = #{@hostname_full}"
           to_terminate_forced = Array(Resque.redis.smembers(:terminate))
           puts to_terminate_forced.inspect
 

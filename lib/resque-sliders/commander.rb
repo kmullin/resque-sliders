@@ -53,6 +53,7 @@ module Resque
           queue2 = queue.gsub(/['":]/, '').strip.gsub(/\s+/, ',').split(/, */).reject { |x| x.nil? or x.empty? }.join(',')
           raise 'Queue Different' unless queue == queue2
           redis_set_hash("#{key_prefix}:#{host}", queue2, quantity) unless queue2.empty?
+          puts redis_get_hash("#{key_prefix}:#{host}")
         end
 
         # Deletes queue for host.

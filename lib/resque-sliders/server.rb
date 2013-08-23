@@ -15,6 +15,7 @@ module Resque
               public_view(params[key], key == 'img' ? 'images' : key)
             else
               @sliders = Commander.new
+
               redirect url_path("/sliders/#{@sliders.all_hosts.first}") if @sliders.all_hosts.length == 1
               slider_view :index
             end
@@ -33,6 +34,7 @@ module Resque
 
           app.get '/sliders/:host' do
             @sliders = Commander.new
+            puts @sliders.queue_values(@sliders.all_hosts.first).inspect
             slider_view :index
           end
 
