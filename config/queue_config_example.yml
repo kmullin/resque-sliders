@@ -1,0 +1,11 @@
+development: 
+  'images': 1
+  'mail,sms': 1
+  '*': 1
+test:
+  '*': 1
+staging:
+  '*': 1
+production:
+  'images': 4
+  'mail,sms': 1
