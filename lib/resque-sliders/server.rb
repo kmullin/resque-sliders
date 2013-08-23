@@ -34,7 +34,6 @@ module Resque
 
           app.get '/sliders/:host' do
             @sliders = Commander.new
-            puts @sliders.queue_values(@sliders.all_hosts.first).inspect
             slider_view :index
           end
 
