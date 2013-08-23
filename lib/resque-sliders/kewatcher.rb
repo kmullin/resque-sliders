@@ -270,7 +270,7 @@ module Resque
                   whost, wpid, wqueues = w.to_s.split(':')
                   if (host.downcase == whost.downcase && pid == wpid)
                     puts "Removing... #{w}"
-                    w.unregister_worker # remove the worker from resque when we remove it from living
+                    w.unregister_worker rescue nil # remove the worker from resque when we remove it from living
                   end
                 end
                 force_kill_child(pid)
