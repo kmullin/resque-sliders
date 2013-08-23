@@ -1,9 +1,8 @@
 require 'resque'
 require 'timeout'
 require 'fileutils'
-
 require 'resque-sliders/helpers'
-
+require 'resque-sliders/commander'
 module Resque
   module Plugins
     module ResqueSliders
@@ -31,12 +30,14 @@ module Resque
 
           @max_children = options[:max_children] || 10
           @hostname = `hostname -s`.chomp.downcase
+          @hostname_full = `hostname`.chomp.downcase
           @pids = Hash.new # init pids array to track running children
           @need_queues = Array.new # keep track of pids that are needed
           @dead_queues = Array.new # keep track of pids that are dead
           @zombie_pids = Hash.new # keep track of zombie's we kill and dont watch(), with elapsed time we've waited for it to die
           @async = options[:async] || false # sync and wait by default
           @hupped = 0
+          @boot_queues = options[:queues]
 
           Resque.redis = case options[:config]
             when Hash
@@ -44,6 +45,11 @@ module Resque
             else
               options[:config]
           end
+          unless options[:config]['namespace'].nil?
+            Resque.redis.namespace = options[:config]['namespace']
+          end
+
+
         end
 
         # run the daemon
@@ -164,6 +170,21 @@ module Resque
           clean_signal_settings
           register_setting('max_children', @max_children)
           log! "Registered Max Children with Redis"
+          # LOAD A YML FILE SPECIFYING RESQUE QUEUES FOR THIS INSTANCE OPTIONALLY
+          commander = Commander.new
+          # USE COMMANDER TO DO STUFF IF THE YML IS ENABLED
+          if commander.queues_on(@hostname).empty?
+            # If queues are already configured don't reconfigure
+            @boot_queues.each_pair do |queue, quantity|   
+              log! "Registering #{quantity} workers for #{queue} on #{@hostname}}"
+              commander.change(@hostname, queue, quantity)
+            end
+          else
+            log! "Queues are already configured for this host don't provision"
+          end
+
+
+
           $stdout.sync = true
         end
 
@@ -237,6 +258,25 @@ module Resque
           # Queries Redis to get Hash of what should running
           # figures what is running and does a diff
           # returns an Array of 2 Arrays: to_start, to_kill
+
+          to_terminate_forced = Array(Resque.redis.smembers(:terminate))
+          puts "Need to terminate:: #{to_terminate_forced.inspect}"
+
+          to_terminate_forced.each do |t|
+             host, pid, queues = t.to_s.split(':')
+             puts (host.downcase == @hostname_full).to_s
+             if (host.downcase == @hostname_full)
+                Resque.workers.each do |w|
+                  whost, wpid, wqueues = w.to_s.split(':')
+                  if (host.downcase == whost.downcase && pid == wpid)
+                    puts "Removing... #{w}"
+                    w.unregister_worker rescue nil # remove the worker from resque when we remove it from living
+                  end
+                end
+                force_kill_child(pid)
+                Resque.redis.srem(:terminate, t)
+             end
+          end
 
           goal, to_start, to_kill = [], [], []
           queue_values(@hostname).each_pair { |queue,count| goal += [queue] * count.to_i }
@@ -319,7 +359,9 @@ module Resque
           kill_children
           @paused = false # unpause after kill (restart child)
         end
-
+        
+        
+        
         # Stop
         def signal_usr1
           kill_children
@@ -359,7 +401,7 @@ module Resque
               wait = !@async ? (@zombie_term_wait - elapsed) / @zombie_pids.length : 0.01
               wait = wait > 0 ? wait : 0.01
               # Issue wait() to make sure pid isn't forgotten
-              Timeout::timeout(wait) { Process.wait(pid) }
+              Timeout::timeout(wait) { Process.wait(pid) } rescue nil
               to_delete << pid
               next
             rescue Timeout::Error
@@ -370,6 +412,18 @@ module Resque
             end
           end
           to_delete.each { |pid| @zombie_pids.delete(pid) }
+        end
+
+        def force_kill_child(pid)
+          begin
+            fresh_kill = `kill -HUP #{pid}` # try graceful shutdown
+            log! "Child #{pid} killed. (#{@pids.keys.length-1})"
+          rescue Object => e # dunno what this does but it works; dont know exception
+            log! "Child #{pid} already dead, sad day. (#{@pids.keys.length-1}) #{e}"
+          ensure
+            # Keep track of ones we've killed
+            @zombie_pids[pid] = [Time.now, 1] # set to current time, killed #
+          end
         end
 
         def kill_child(pid)

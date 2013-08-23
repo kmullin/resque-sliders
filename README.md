@@ -42,6 +42,7 @@ Usage: kewatcher [options]
 
 Options:
     -c, --config CONFIG              Resque Config (Yaml)
+    -q, --queues QUEUE_CONFIG        Worker Queue Config (Yaml)
     -r, --rakefile RAKEFILE          Rakefile location
     -p, --pidfile PIDFILE            PID File location
     -f, --force                      FORCE KILL ANY OTHER RUNNING KEWATCHERS
@@ -68,6 +69,25 @@ Options:
     -f|--force              (Force): Force any currently running KEWatcher processes to quit, waiting for it to do so, and starting in its place
                             RAILS_ENV: If you're using rails, you need to set your RAILS_ENV variable
 ```
+
+#### Example YAML
+
+An example of the resque.yml and an example of queues.yaml are included under this gem's config directory
+
+Queues are configured as follows:
+
+    development: 
+      'images': 1
+      'mail,sms': 1
+      '*': 1
+    test:
+      '*': 1
+    staging:
+      '*': 1
+    production:
+      'images': 4
+      'mail,sms': 1
+
 
 #### Controlling the Daemon
 

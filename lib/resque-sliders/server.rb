@@ -15,10 +15,22 @@ module Resque
               public_view(params[key], key == 'img' ? 'images' : key)
             else
               @sliders = Commander.new
+
               redirect url_path("/sliders/#{@sliders.all_hosts.first}") if @sliders.all_hosts.length == 1
               slider_view :index
             end
           end
+          app.get '/proccess_hup/:host/:pid' do
+            Resque.workers.each do |w|
+              host, pid, queues = w.to_s.split(':')
+              if (params[:host] == host && params[:pid] == pid)
+                Resque.redis.sadd(:terminate, w)
+              end
+            end
+            {:status => "ok"}.to_json
+          end
+
+
 
           app.get '/sliders/:host' do
             @sliders = Commander.new
