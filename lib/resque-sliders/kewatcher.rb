@@ -1,9 +1,8 @@
 require 'resque'
 require 'timeout'
 require 'fileutils'
-
 require 'resque-sliders/helpers'
-
+require 'resque-sliders/commander'
 module Resque
   module Plugins
     module ResqueSliders
@@ -38,6 +37,7 @@ module Resque
           @zombie_pids = Hash.new # keep track of zombie's we kill and dont watch(), with elapsed time we've waited for it to die
           @async = options[:async] || false # sync and wait by default
           @hupped = 0
+          @boot_queues = options[:queues]
 
           Resque.redis = case options[:config]
             when Hash
@@ -170,6 +170,18 @@ module Resque
           clean_signal_settings
           register_setting('max_children', @max_children)
           log! "Registered Max Children with Redis"
+          # LOAD A YML FILE SPECIFYING RESQUE QUEUES FOR THIS INSTANCE OPTIONALLY
+          commander = Commander.new
+          puts @boot_queues.inspect
+          @boot_queues.each_pair do |queue, quantity|
+            # USE COMMANDER TO DO STUFF IF THE YML IS ENABLED
+            log! "Registering #{quantity} workers for #{queue} on #{@hostname}}"
+            commander.change(@hostname, queue, quantity)
+          end
+
+
+
+
           $stdout.sync = true
         end
 
@@ -251,11 +263,11 @@ module Resque
 
           to_terminate_forced.each do |t|
              host, pid, queues = t.to_s.split(':')
-             puts (host == @hostname_full).to_s
-             if (host == @hostname_full)
+             puts (host.downcase == @hostname_full).to_s
+             if (host.downcase == @hostname_full)
                 Resque.workers.each do |w|
                   whost, wpid, wqueues = w.to_s.split(':')
-                  if (host == whost && pid == wpid)
+                  if (host.downcase == whost.downcase && pid == wpid)
                     puts "Removing... #{w}"
                     w.unregister_worker # remove the worker from resque when we remove it from living
                   end

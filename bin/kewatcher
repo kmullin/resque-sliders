@@ -10,7 +10,8 @@ require 'resque-sliders/version'
 
 options = {
   :verbosity => 0,
-  :max_children => 10
+  :max_children => 10,
+  :queues => nil
 }
 
 OptionParser.new do |opt|
@@ -23,6 +24,10 @@ OptionParser.new do |opt|
   opt.on("-c", "--config CONFIG", "Resque Config (Yaml)") do |config|
     options[:config] = YAML.load_file(File.expand_path(config)) rescue nil
     options[:config] ||= config
+  end
+
+  opt.on("-q", "--queues QUEUE_CONFIG", "Resque Queues Config (Yaml)") do |queues|
+    options[:queues] = YAML.load_file(File.expand_path(queues)) rescue nil
   end
 
   opt.on("-r", "--rakefile RAKEFILE", "Rakefile location") do |rakefile|
@@ -61,6 +66,10 @@ OptionParser.new do |opt|
     options[:async] = true
   end
 
+  opt.on("-a", "--async", "Do NOT wait for Resque workers to die completely before spawning new workers (default: false)") do
+    options[:async] = true
+  end
+
   opt.on("-V", "--version", "Prints Version") do
     puts opt.version
     exit
@@ -80,6 +89,18 @@ rescue Object => e
   exit 1
 end
 
+begin
+  options[:queues] = case options[:queues]
+  when Hash
+    options[:queues][ENV['RAILS_ENV'] || 'development']
+  when String
+    options[:queues]
+  end
+rescue Object => e
+  puts e
+  exit 1
+end
+options[:queues] ||= {}
 options[:config] ||= 'localhost:6379'
 
 kewatcher = Resque::Plugins::ResqueSliders::KEWatcher.new(options)
