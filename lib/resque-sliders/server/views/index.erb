@@ -106,7 +106,7 @@
         pid = $(this).attr("data-pid");
         $.ajax({
           type : "GET",
-          url : '../proccess_hup/' + host + '/' + pid,
+          url : 'proccess_hup/' + host + '/' + pid,
           success: function(obj){
             console.log(obj)
             alert("Killing")
