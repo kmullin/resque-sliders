@@ -3,6 +3,10 @@ module Resque
     module ResqueSliders
       module Helpers
 
+        def known_hosts_set_name
+          "plugins:resque-sliders:known_hosts"
+        end
+
         def key_prefix
           "plugins:resque-sliders"
         end
