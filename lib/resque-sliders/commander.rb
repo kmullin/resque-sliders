@@ -12,7 +12,8 @@ module Resque
           @host_status = redis_get_hash(host_config_key)
           # Resque::Worker.all returns a list of strings like ["dalstgcmozwork02:27668:high_priority"]
           # and we want ["dalstgcmozwork02"]
-          @stale_hosts = Resque::Worker.all.map(&:to_s).map{|id| id.split(':').first}.uniq
+          online_hosts = hosts
+          @stale_hosts = Resque::Worker.all.map(&:to_s).map{|id| id.split(':').first}.uniq.reject{|stale| online_hosts.include?(stale)}
         end
 
         # Return Array of currently online hosts
