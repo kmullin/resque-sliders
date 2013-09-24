@@ -10,7 +10,9 @@ module Resque
 
         def initialize
           @host_status = redis_get_hash(host_config_key)
-          @stale_hosts = Resque.redis.keys("#{key_prefix}:*").map { |x| y = x.split(':').last; y unless x == host_config_key or hosts.include?(y) }.compact.sort
+          # Resque::Worker.all returns a list of strings like ["dalstgcmozwork02:27668:high_priority"]
+          # and we want ["dalstgcmozwork02"]
+          @stale_hosts = Resque::Worker.all.map(&:to_s).map{|id| id.split(':').first}.uniq
         end
 
         # Return Array of currently online hosts
