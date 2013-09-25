@@ -55,7 +55,11 @@ module Resque
             pid_time.split(":").map{|n| n.to_i}
           end
           pids_times.each do |pid, start_time|
-            Process.kill(:KILL, pid) if Time.now.to_i > start_time + @max_running_time
+            begin
+              Process.kill(:KILL, pid) if Time.now.to_i > start_time + @max_running_time
+            rescue Errno::ESRCH => e
+              #do nothing because the process doesn't exist
+            end
           end
         end
 
