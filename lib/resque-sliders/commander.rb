@@ -10,7 +10,10 @@ module Resque
 
         def initialize
           @host_status = redis_get_hash(host_config_key)
-          @stale_hosts = Resque.redis.keys("#{key_prefix}:*").map { |x| y = x.split(':').last; y unless x == host_config_key or hosts.include?(y) }.compact.sort
+          # Resque::Worker.all returns a list of strings like ["dalstgcmozwork02:27668:high_priority"]
+          # and we want ["dalstgcmozwork02"]
+          online_hosts = hosts
+          @stale_hosts = Resque::Worker.all.map(&:to_s).map{|id| id.split(':').first}.uniq.reject{|stale| online_hosts.include?(stale)}
         end
 
         # Return Array of currently online hosts
@@ -47,11 +50,11 @@ module Resque
 
         # Changes queues to quantiy for host.
         # Returns boolean.
-        def change(host, queue, quantity)
+        def change(host, queue, quantity, force = false)
           # queue is sanitized by:
           # replacing punctuation with spaces, strip end spaces, split on remaining whitespace, and join again on comma.
           queue2 = queue.gsub(/['":]/, '').strip.gsub(/\s+/, ',').split(/, */).reject { |x| x.nil? or x.empty? }.join(',')
-          raise 'Queue Different' unless queue == queue2
+          raise 'Queue Different' unless (force || queue == queue2)
           redis_set_hash("#{key_prefix}:#{host}", queue2, quantity) unless queue2.empty?
         end
 

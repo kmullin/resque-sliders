@@ -20,6 +20,25 @@ module Resque
             end
           end
 
+          app.get '/sliders/queues' do
+            @sliders = DistributedCommander.new
+            slider_view :queues
+          end
+
+          app.post '/sliders/queues' do
+            @debug = params
+            if params[:quantity] && params[:queue]
+              dc = DistributedCommander.new
+              queue = params[:queue].split.first
+              quantity = params[:quantity].to_i
+              if quantity.zero?
+                dc.distributed_delete(queue)
+              else
+                dc.distributed_change(queue, quantity)
+              end
+            end
+          end
+
           app.get '/sliders/:host' do
             @sliders = Commander.new
             slider_view :index

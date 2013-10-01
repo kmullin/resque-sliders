@@ -100,6 +100,9 @@ module Resque
                 procline
               end
             end
+            if @pidfile
+              write_children_pids
+            end
 
             register_setting('current_children', @pids.keys.length) if old != @pids.length
             old = @pids.length
@@ -133,6 +136,25 @@ module Resque
           end
         end
 
+        def child_pid_file_name
+          "#{@pidfile}_children.pid"
+        end
+
+        def write_children_pids
+          File.open(child_pid_file_name, 'w') {|f| f.write(MultiJson.encode(@pids.keys))}
+        end
+
+        def kill_orphans
+          begin
+            orphan_pids = MultiJson.decode(IO.read(child_pid_file_name))
+            orphan_pids.each do |orphan|
+              kill_child(orphan)
+            end
+          rescue 
+            nil
+          end
+        end
+
         # Returns PID if already running, false otherwise
         def running?
           pid = `ps x -o pid,command|grep [K]EWatcher|awk '{print $1}'`.to_i
@@ -147,11 +169,15 @@ module Resque
           while pid = running?
             (puts "#{pid} wont die; giving up"; exit 2) if count > 6
             count += 1
-            if count % 5 == 1
+            case count 
+            when 1
               puts "Killing running KEWatcher: #{pid}"
               Process.kill(:TERM, pid)
+            when 5
+              puts "Killing running KEWatcher: #{pid}.. with FIRE!"
+              Process.kill(:KILL, pid)
             end
-            s = 3 * count
+            s = 2 * count
             puts "Waiting #{s}s for it to die..."
             sleep(s)
           end
@@ -159,11 +185,12 @@ module Resque
 
         def startup
           log! "Found RAILS_ENV=#{ENV['RAILS_ENV']}" if ENV['RAILS_ENV']
+          kill_orphans
           enable_gc_optimizations
           register_signal_handlers
           clean_signal_settings
           register_setting('max_children', @max_children)
-          log! "Registered Max Children with Redis"
+          log! "Registered Max Children with Redis #{max_children}"
           $stdout.sync = true
         end
 

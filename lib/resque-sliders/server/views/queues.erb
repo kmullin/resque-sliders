@@ -1,0 +1,22 @@
+<% @subtabs = ['queues'] + @sliders.all_hosts %>
+
+<h1>Sliders</h1>
+
+<div id="sliders">
+  <link href="<%= url_path("/sliders?css=sliders.css") %>" rel="stylesheet" type="text/css" />
+  <link href="<%= url_path("/sliders?css=jqueryui-1.8.16/blitzer/jquery-ui.custom.css") %>" rel="stylesheet" type="text/css" />
+  <script src="<%= url_path("/sliders?js=jquery-ui-1.8.16.custom.min.js") %>" type="text/javascript"></script>
+  <script src="<%= url_path("/sliders?js=sliders.js") %>" type="text/javascript"></script>
+
+<% @sliders.all_queue_values.each_pair.sort.each do |queue,value| %>
+  <p>
+    <label for="value"><%= queue %>: </label>
+    <input type="text" id="<%= queue.gsub(',', ':') %>-value" class="values" />
+  </p>
+  <div id="<%= queue.gsub(',', ':') %>-slider" class="slider"><%= value %></div>
+<% end %>
+  <form id="queues" class="new_form">
+    <input type="text" id="new_queue" />
+    <span id="plus-one" type="submit" class="ui-icon ui-icon-plus ui-corner-all ui-state-default" /></span>
+  </form>
+</div>

@@ -7,3 +7,5 @@ require 'resque-sliders/helpers'
 require 'resque-sliders/commander'
 require 'resque-sliders/server'
 require 'resque-sliders/version'
+require 'resque-sliders/distributed_commander'
+
