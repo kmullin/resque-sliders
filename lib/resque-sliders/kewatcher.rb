@@ -48,20 +48,21 @@ module Resque
         end
 
         def kill_long_running_processes!
-         # #$1 is the pid of the parent resque process,
-         # #$NF is the time the child resque process was created
-         # resque_parent_processes_str = `ps -A -o pid,command | grep -P -e "Forked [[:digit:]]+ at [[:digit:]]+" | awk '{print $1 ":" $(NF-1)}'`
-         # pids_times = resque_parent_processes_str.split("\n").map do |pid_time|
-         #   #starts as "12345:123456789876543"
-         #   pid_time.split(":").map{|n| n.to_i}
-         # end
-         # pids_times.each do |pid, start_time|
-         #   begin
-         #     Process.kill(:USR1, pid) if Time.now.to_i > start_time + @max_running_time
-         #   rescue Errno::ESRCH => e
-         #     #do nothing because the process doesn't exist
-         #   end
-         # end
+          #$1 is the pid of the parent resque process,
+          #$NF is the time the child resque process was created
+          resque_parent_processes_str = `ps -A -o pid,command | grep -P -e "Forked [[:digit:]]+ at [[:digit:]]+" | awk '{print $1 ":" $(NF-1)}'`
+          pids_times = resque_parent_processes_str.split("\n").map do |pid_time|
+            #starts as "12345:123456789876543"
+            pid_time.split(":").map{|n| n.to_i}
+          end
+          pids_times.each do |pid, start_time|
+            begin
+              log! ["killing", pid, "at #{Time.now} because it started at #{Time.at(start_time)} (#{start_time})"].join(" ")
+              Process.kill(:KILL, pid) if Time.now.to_i > start_time + @max_running_time
+            rescue Errno::ESRCH => e
+              #do nothing because the process doesn't exist
+            end
+          end
         end
 
         # run the daemon
