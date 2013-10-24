@@ -362,12 +362,10 @@ module Resque
               # Issue wait() to make sure pid isn't forgotten
               Timeout::timeout(wait) { Process.wait(pid) }
               to_delete << pid
-              next
             rescue Timeout::Error
               # waited too long so just catch and ignore, and continue
             rescue Errno::ESRCH, Errno::ECHILD # child is gone
               to_delete << pid
-              next
             end
           end
           to_delete.each { |pid| @zombie_pids.delete(pid) }
