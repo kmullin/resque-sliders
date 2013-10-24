@@ -163,6 +163,7 @@ module Resque
           register_signal_handlers
           clean_signal_settings
           register_setting('max_children', @max_children)
+          add_to_known_hosts(@hostname)
           log! "Registered Max Children with Redis"
           $stdout.sync = true
         end

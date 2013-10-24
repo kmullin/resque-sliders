@@ -45,6 +45,11 @@ module Resque
             end
           end
 
+          # we need the ability to remove old hosts
+          app.delete '/sliders/:host' do
+            Commander.new.remove_all_host_keys(params[:host])
+          end
+
           app.helpers do
             def slider_view(filename, options={}, locals={})
               erb(File.read(File.join(VIEW_PATH, "#{filename}.erb")), options, locals)

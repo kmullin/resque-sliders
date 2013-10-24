@@ -10,17 +10,34 @@ module Resque
 
         def initialize
           @host_status = redis_get_hash(host_config_key)
-          @stale_hosts = Resque.redis.keys("#{key_prefix}:*").map { |x| y = x.split(':').last; y unless x == host_config_key or hosts.include?(y) }.compact.sort
+          @stale_hosts = Resque.redis.smembers(known_hosts_key) - hosts
         end
 
         # Return Array of currently online hosts
         def hosts
-          @host_status.keys.select { |x| x unless %w(reload pause stop).include? x.split(':').last }.map { |x| x.split(':').first }.uniq.sort
+          Set.new.tap do |l|
+            @host_status.keys.each do |x|
+              x = x.split(':')
+              l << x.first unless %w(reload pause stop).include?(x.last)
+            end
+          end.to_a.sort
         end
 
         # Array of all hosts (current + stale)
         def all_hosts
           (hosts + stale_hosts).sort
+        end
+
+        # Remove all keys for a host (clean)
+        def remove_all_host_keys(hostname)
+          # expensive process O(N)
+          keys_to_delete = Resque.redis.keys("#{key_prefix}:*").select { |k| name = k.split(':').last; hostname == name }
+          # look at config hash, remove fields if relate to this hostname
+          fields_to_delete = redis_get_hash(host_config_key).keys.select { |k| name = k.split(':').first; hostname == name }
+          # do delete
+          Resque.redis.del(keys_to_delete) unless keys_to_delete.empty?
+          redis_del_hash(host_config_key, fields_to_delete) unless fields_to_delete.empty?
+          del_from_known_hosts(hostname)
         end
 
         # Return current children count or nil if Host hasn't registered itself.

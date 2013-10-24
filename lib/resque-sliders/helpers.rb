@@ -3,12 +3,28 @@ module Resque
     module ResqueSliders
       module Helpers
 
+        # prefix to all keys our plugin uses in redis
         def key_prefix
           "plugins:resque-sliders"
         end
 
+        # we store everything in this hash
         def host_config_key
-          "plugins:resque-sliders:host_configs"
+          "#{key_prefix}:host_configs"
+        end
+
+        # used to keep track of hosts we know about
+        def known_hosts_key
+          "#{key_prefix}:known_hosts"
+        end
+
+        def add_to_known_hosts(hostname)
+          # add a hostname to the hosts set
+          Resque.redis.sadd(known_hosts_key, hostname)
+        end
+
+        def del_from_known_hosts(hostname)
+          Resque.redis.srem(known_hosts_key, hostname)
         end
 
         def redis_get_hash(key)
