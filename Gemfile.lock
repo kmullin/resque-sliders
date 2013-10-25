@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    resque-sliders (0.2.1)
+    resque-sliders (0.2.2)
       resque (>= 1.15.0, < 2.0)
 
 GEM
