@@ -14,6 +14,7 @@ Gem::Specification.new do |s|
   s.add_dependency 'resque', ['>= 1.15.0', '< 2.0']
   s.extra_rdoc_files = ["README.md", "MIT-LICENSE"]
 
+  s.license       = 'MIT'
   s.files         = `git ls-files`.split("\n")
   s.files        -= %w(.gitignore Gemfile Gemfile.lock resque-sliders.gemspec Rakefile .travis.yml)
   s.files        -= s.files.grep(%r{^(misc|helpers)/})
