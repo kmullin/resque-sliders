@@ -1,3 +1,4 @@
+require 'zlib'
 module Resque
   module Plugins
     module ResqueSliders
@@ -5,11 +6,15 @@ module Resque
         include Helpers
 
         def distributed_change(queue, count)
+          #we want the starting server for a job-type to be random across all the workers, but consistent so we aren't starting up/shutting things down all the time.  A hash of the queue-name modded by the number of workers should give us a good solution.
+          
           host_job_mappings = {}
           host_set = all_hosts
+          host_set_size = all_hosts.size
+          consistent_random_start_index = Zlib.crc32(queue) % host_set_size
 
           count.times do |numb|
-            current_host = host_set.rotate!.first
+            current_host = host_set[(numb + consistent_random_start_index) % host_set_size ]
             host_job_mappings[current_host] ||= 0
             host_job_mappings[current_host] += 1
           end
