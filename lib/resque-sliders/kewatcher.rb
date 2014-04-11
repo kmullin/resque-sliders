@@ -56,6 +56,7 @@ module Resque
             end
             restart_running!
           end
+
           $0 = "KEWatcher: Starting"
           startup
 
@@ -79,6 +80,7 @@ module Resque
                 exec_string << ' environment' if ENV['RAILS_ENV']
                 exec_string << ' resque:work'
                 env_opts = {"QUEUE" => queue}
+
                 if Resque::Version >= '1.22.0' # when API changed for signals
                   term_timeout = @zombie_kill_wait - @zombie_term_wait
                   term_timeout = term_timeout > 0 ? term_timeout : 1
@@ -87,15 +89,20 @@ module Resque
                     'RESQUE_TERM_TIMEOUT' => term_timeout.to_s # use new signal handling
                   })
                 end
+
                 exec_args = if RUBY_VERSION < '1.9'
                   [exec_string, env_opts.map {|k,v| "#{k}=#{v}"}].flatten.join(' ')
                 else
                   [env_opts, exec_string] # 1.9.x exec
                 end
+
                 pid = fork do
+                  # pick up underlying symlink directory changes (ie after a deploy)
+                  Dir.chdir(`pwd -L`.chomp)
                   srand # seed
                   exec(*exec_args)
                 end
+
                 @pids.store(pid, queue) # store pid and queue its running if fork() ?
                 procline
               end
