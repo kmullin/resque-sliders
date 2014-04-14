@@ -38,16 +38,16 @@ module Resque
           @async = options[:async] || false # sync and wait by default
           @hupped = 0
 
-          case options[:config]
+          config = options[:config]
+          case config
             when Hash
-              url = "redis://#{options[:config]['host']}:#{options[:config]['port']}/#{options[:config]['db'] || 0}"
-              password = options[:config]['password']
-              namespace = options[:config]['namespace'] || :resque
+              url = "redis://#{config['host']}:#{config['port']}/#{config['db'] || 0}"
+              namespace = config['namespace'] || :resque
 
-              redis = Redis.new(url: url, password: password)
+              redis = Redis.new(url: url, password: config['password'])
               Resque.redis = Redis::Namespace.new(namespace.to_sym, redis: redis)
             else
-              Resque.redis = options[:config]
+              Resque.redis = config
           end
         end
 
