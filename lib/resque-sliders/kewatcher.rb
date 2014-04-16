@@ -60,7 +60,8 @@ module Resque
           startup
 
           count = 0
-          old = 0 # know when to tell redis we have new different current pids
+          worker_count = 0 # know when to tell redis we have new different current pids
+
           loop do
             break if shutdown?
             count += 1
@@ -68,41 +69,7 @@ module Resque
 
             tick = count % (20 / interval) == 1
             (log! "checking signals..."; check_signals) if tick
-            if not (paused? || shutdown?)
-              queue_diff! if tick # do first and also about every 20 seconds so we can throttle calls to redis
-
-              while @pids.keys.length < @max_children && (@need_queues.length > 0 || @dead_queues.length > 0)
-                queue = @dead_queues.shift || @need_queues.shift
-                exec_string = ""
-                exec_string << 'rake'
-                exec_string << " -f #{@rakefile}" if @rakefile
-                exec_string << ' environment' if ENV['RAILS_ENV']
-                exec_string << ' resque:work'
-                env_opts = {"QUEUE" => queue}
-                if Resque::Version >= '1.22.0' # when API changed for signals
-                  term_timeout = @zombie_kill_wait - @zombie_term_wait
-                  term_timeout = term_timeout > 0 ? term_timeout : 1
-                  env_opts.merge!({
-                    'TERM_CHILD' => '1',
-                    'RESQUE_TERM_TIMEOUT' => term_timeout.to_s # use new signal handling
-                  })
-                end
-                exec_args = if RUBY_VERSION < '1.9'
-                  [exec_string, env_opts.map {|k,v| "#{k}=#{v}"}].flatten.join(' ')
-                else
-                  [env_opts, exec_string] # 1.9.x exec
-                end
-                pid = fork do
-                  srand # seed
-                  exec(*exec_args)
-                end
-                @pids.store(pid, queue) # store pid and queue its running if fork() ?
-                procline
-              end
-            end
-
-            register_setting('current_children', @pids.keys.length) if old != @pids.length
-            old = @pids.length
+            worker_count = maintain_worker_count(worker_count, tick)
 
             procline if tick
 
@@ -115,20 +82,42 @@ module Resque
               @hupped -= 1
             end
 
-            @pids.keys.each do |pid|
-              begin
-                # check to see if pid is running, by waiting for it, with a timeout
-                # Im sure Ruby 1.9 has some better helpers here
-                Timeout::timeout(interval / 100) { Process.wait(pid) }
-              rescue Timeout::Error
-                # Timeout expired, goto next pid
-                next
-              rescue Errno::ECHILD
-                # if no pid exists to wait for, remove it
-                log! (paused? || shutdown?) ? "#{pid} (#{@pids[pid]}) child died; no one cares..." : "#{pid} (#{@pids[pid]}) child died; spawning another..."
-                remove pid
-                break
-              end
+            check_worker_status(interval)
+          end
+
+          shutdown! if shutdown?
+        end
+
+        def maintain_worker_count(old_worker_count, tick)
+          return if paused? || shutdown?
+
+          queue_diff! if tick # do first and also about every 20 seconds so we can throttle calls to redis
+
+          while @pids.keys.length < @max_children && (@need_queues.length > 0 || @dead_queues.length > 0)
+            queue = @dead_queues.shift || @need_queues.shift
+            pid = spawn_worker!(queue)
+            @pids.store(pid, queue) # store pid and queue its running if fork() ?
+            procline
+          end
+
+          register_setting('current_children', @pids.keys.length) if old_worker_count != @pids.length
+          @pids.length
+        end
+
+        def check_worker_status(interval)
+          @pids.keys.each do |pid|
+            begin
+              # check to see if pid is running, by waiting for it, with a timeout
+              # Im sure Ruby 1.9 has some better helpers here
+              Timeout::timeout(interval / 100) { Process.wait(pid) }
+            rescue Timeout::Error
+              # Timeout expired, goto next pid
+              next
+            rescue Errno::ECHILD
+              # if no pid exists to wait for, remove it
+              log! (paused? || shutdown?) ? "#{pid} (#{@pids[pid]}) child died; no one cares..." : "#{pid} (#{@pids[pid]}) child died; spawning another..."
+              remove pid
+              break
             end
           end
         end
@@ -175,11 +164,11 @@ module Resque
         end
 
         def register_signal_handlers
-          trap('TERM') { shutdown! }
-          trap('INT') { shutdown! }
+          trap('TERM') { @shutdown = true }
+          trap('INT') { @shutdown = true }
 
           begin
-            trap('QUIT') { shutdown! }
+            trap('QUIT') { @shutdown = true }
             trap('HUP') { @hupped += 1 }
             trap('USR1') { log "USR1 received; killing little children..."; set_signal_flag('stop'); signal_usr1 }
             trap('USR2') { log "USR2 received; not making babies"; set_signal_flag('pause'); signal_usr2 }
@@ -294,15 +283,12 @@ module Resque
         end
 
         def shutdown!
-          log "Exiting..."
-          @shutdown = true
+          log 'Exiting...'
           kill_children
-          while @zombie_pids.keys.length > 0
-            kill_zombies!
-          end
+          kill_zombies! while @zombie_pids.keys.length > 0
           %w(current max).each { |x| unregister_setting("#{x}_children") }
-          log! "Unregistered Max Children"
-          Process.waitall()
+          log! 'Unregistered Max Children'
+          Process.waitall
           remove_pidfile!
         end
 
@@ -434,6 +420,33 @@ module Resque
           File.exists?(@pidfile) && File.delete(@pidfile) if @pidfile
         end
 
+        def spawn_worker!(queue)
+          exec_string = ""
+          exec_string << 'rake'
+          exec_string << " -f #{@rakefile}" if @rakefile
+          exec_string << ' environment' if ENV['RAILS_ENV']
+          exec_string << ' resque:work'
+          env_opts = {"QUEUE" => queue}
+          if Resque::Version >= '1.22.0' # when API changed for signals
+            term_timeout = @zombie_kill_wait - @zombie_term_wait
+            term_timeout = term_timeout > 0 ? term_timeout : 1
+            env_opts.merge!({
+                'TERM_CHILD' => '1',
+                'RESQUE_TERM_TIMEOUT' => term_timeout.to_s # use new signal handling
+              })
+          end
+          exec_args =
+            if RUBY_VERSION < '1.9'
+              [exec_string, env_opts.map {|k,v| "#{k}=#{v}"}].flatten.join(' ')
+            else
+              [env_opts, exec_string] # 1.9.x exec
+            end
+
+          fork do
+            srand # seed
+            exec(*exec_args)
+          end
+        end
       end
     end
   end
