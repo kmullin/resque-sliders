@@ -294,16 +294,18 @@ module Resque
         end
 
         def shutdown!
-          log "Exiting..."
-          @shutdown = true
-          kill_children
-          while @zombie_pids.keys.length > 0
-            kill_zombies!
+          Thread.new do
+            log "Exiting..."
+            kill_children
+            while @zombie_pids.keys.length > 0
+              kill_zombies!
+            end
+            %w(current max).each { |x| unregister_setting("#{x}_children") }
+            log! "Unregistered Max Children"
+            Process.waitall()
+            remove_pidfile!
+            @shutdown = true
           end
-          %w(current max).each { |x| unregister_setting("#{x}_children") }
-          log! "Unregistered Max Children"
-          Process.waitall()
-          remove_pidfile!
         end
 
         def shutdown?
