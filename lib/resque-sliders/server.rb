@@ -31,11 +31,7 @@ module Resque
               sliders = Commander.new
               queue = params[:queue].split.first
               quantity = params[:quantity].to_i
-              if quantity.zero?
-                sliders.delete(params[:host], queue)
-              else
-                sliders.change(params[:host], queue, quantity)
-              end
+              sliders.change(params[:host], queue, quantity)
             elsif signals.length == 1
               sliders = Commander.new
               sig = signals.keys.first.to_s
