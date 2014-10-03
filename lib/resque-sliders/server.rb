@@ -27,13 +27,15 @@ module Resque
 
           app.post '/sliders/:host' do
             signals = params.reject { |x,y| x unless %w(pause stop play reload).include? x.to_s and y }
+            sliders = Commander.new
             if params[:quantity] && params[:queue]
-              sliders = Commander.new
               queue = params[:queue].split.first
               quantity = params[:quantity].to_i
               sliders.change(params[:host], queue, quantity)
+            elsif params[:queue] && params[:delete]
+              queue = params[:queue].split.first
+              sliders.delete(params[:host], queue)
             elsif signals.length == 1
-              sliders = Commander.new
               sig = signals.keys.first.to_s
               sliders.set_signal_flag(sig, params[:host])
               content_type :json
