@@ -1,6 +1,7 @@
 require 'resque'
 require 'timeout'
 require 'fileutils'
+require 'yaml'
 
 require 'resque-sliders/helpers'
 
@@ -27,6 +28,8 @@ module Resque
           @rakefile = File.exists?(@rakefile) ? @rakefile : nil if @rakefile
           @pidfile = File.expand_path(options[:pidfile]) rescue nil
           @pidfile = @pidfile =~ /\.pid$/ ? @pidfile : @pidfile + '.pid' if @pidfile
+          @poolfile = File.expand_path(options[:poolfile]) rescue nil
+          @poolfile = File.exists?(@poolfile) ? @poolfile : nil if @poolfile
           save_pid!
 
           @max_children = options[:max_children] || 10
@@ -164,6 +167,7 @@ module Resque
           clean_signal_settings
           register_setting('max_children', @max_children)
           add_to_known_hosts(@hostname)
+          add_existing_workers if @poolfile
           log! "Registered Max Children with Redis"
           $stdout.sync = true
         end
@@ -189,6 +193,14 @@ module Resque
           end
 
           log! "Registered signals"
+        end
+
+        def add_existing_workers
+          yml = YAML.load(File.open(@poolfile))
+          workers = yml.keys.map{|key| key.split(',')}.flatten.uniq
+          workers.each do |worker|  
+            redis_set_hash("#{key_prefix}:#{@hostname}", worker, 0) unless redis_get_hash_field("#{key_prefix}:#{@hostname}", worker)
+          end
         end
 
         def clean_signal_settings
