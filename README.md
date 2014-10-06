@@ -44,6 +44,7 @@ Options:
     -c, --config CONFIG              Resque Config (Yaml)
     -r, --rakefile RAKEFILE          Rakefile location
     -p, --pidfile PIDFILE            PID File location
+    -P, --poolfile POOLFILE          Resque Pool Config file location to preload workers from(Yaml)
     -f, --force                      FORCE KILL ANY OTHER RUNNING KEWATCHERS
     -v, --verbose                    Verbosity (Can be specified more than once, -vv)
     -m, --max MAX                    Max Children (default: 10)
