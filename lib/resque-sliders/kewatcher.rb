@@ -76,10 +76,9 @@ module Resque
 
               while @pids.keys.length < @max_children && (@need_queues.length > 0 || @dead_queues.length > 0)
                 queue = @dead_queues.shift || @need_queues.shift
-                exec_string = ""
+                exec_string = ENV['RAILS_ENV'] ? "#{ENV['RAILS_ENV']} " : ""
                 exec_string << 'rake'
                 exec_string << " -f #{@rakefile}" if @rakefile
-                exec_string << ' environment' if ENV['RAILS_ENV']
                 exec_string << ' resque:work'
                 env_opts = {"QUEUE" => queue}
                 if Resque::Version >= '1.22.0' # when API changed for signals
