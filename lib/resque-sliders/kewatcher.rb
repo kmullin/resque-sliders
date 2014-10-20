@@ -76,7 +76,7 @@ module Resque
 
               while @pids.keys.length < @max_children && (@need_queues.length > 0 || @dead_queues.length > 0)
                 queue = @dead_queues.shift || @need_queues.shift
-                exec_string = ENV['RAILS_ENV'] ? "#{ENV['RAILS_ENV']} " : ""
+                exec_string = ENV['RAILS_ENV'] ? "RAILS_ENV=#{ENV['RAILS_ENV']} " : ""
                 exec_string << 'rake'
                 exec_string << " -f #{@rakefile}" if @rakefile
                 exec_string << ' resque:work'
