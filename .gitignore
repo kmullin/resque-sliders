@@ -1,6 +1,7 @@
 .rvmrc
 *.swp
 *.log
+*.gem
 pkg/
 Gemfile.lock
 .DS_Store

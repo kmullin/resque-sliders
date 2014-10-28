@@ -19,13 +19,14 @@
   <% @sliders.queue_values(host).each_pair do |queue,value| %>
     <p>
       <label for="value"><%= queue %>: </label>
-      <input type="text" id="<%= queue.gsub(',', ':') %>-value" class="values" />
+      <input type="text" id="<%= queue.gsub(',', ':') %>-value" class="values worker-counter"/>
+      <span id="<%= host %>-<%= queue.gsub(',', ':') %>-delete_worker" class="ui-icon ui-icon-closethick ui-corner-all ui-state-default worker-action-button deleter"/>
     </p>
     <div id="<%= queue.gsub(',', ':') %>-slider" class="slider"><%= value %></div>
   <% end %>
     <form id="<%= host %>" class="new_form">
       <input type="text" id="new_queue" />
-      <span id="plus-one" type="submit" class="ui-icon ui-icon-plus ui-corner-all ui-state-default" /></span>
+      <span id="plus-one" type="submit" class="ui-icon ui-icon-plus ui-corner-all ui-state-default worker-action-button" />
     </form>
 <% else %>
   <table class="hosts">

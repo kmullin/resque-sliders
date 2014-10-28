@@ -30,3 +30,10 @@
   width: 500px;
   margin: 0px 20px;
 }
+.worker-counter{
+  width: 35px; 
+}
+.worker-action-button{
+  display:  inline-block !important;
+  vertical-align:  text-bottom;
+}

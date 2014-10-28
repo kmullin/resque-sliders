@@ -33,6 +33,10 @@ OptionParser.new do |opt|
     options[:pidfile] = pidfile
   end
 
+  opt.on("-P", "--poolfile POOLFILE", "Path to the resque pool file for pre-initialization") do |poolfile|
+    options[:poolfile] = poolfile
+  end
+
   opt.on("-f", "--force", "FORCE KILL ANY OTHER RUNNING KEWATCHERS") do
     options[:force] = true
   end
